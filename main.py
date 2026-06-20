@@ -152,7 +152,11 @@ async def main():
                 "--disable-setuid-sandbox",
                 "--disable-gpu",
                 "--no-first-run",
-                "--no-zygote"
+                "--no-zygote",
+                "--single-process",
+                "--disable-extensions",
+                "--disable-component-extensions",
+                "--js-flags=--max-old-space-size=128"
             ]
         )
         # Create a realistic context with custom user agent and locale
@@ -164,6 +168,14 @@ async def main():
             extra_http_headers={"Accept-Language": "ja-JP,ja;q=0.9"}
         )
         page = await context.new_page()
+        
+        # Block images, CSS, fonts and media to save RAM on Railway
+        async def block_resources(route):
+            if route.request.resource_type in ["image", "stylesheet", "font", "media"]:
+                await route.abort()
+            else:
+                await route.continue_()
+        await page.route("**/*", block_resources)
         
         try:
             if args.once:
