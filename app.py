@@ -72,112 +72,131 @@ class ScraperRunner:
         async with async_playwright() as p:
             logger.info("WebUI Bot: Launching headless browser...")
             browser = await p.chromium.launch(headless=True)
-            context = await browser.new_context(
-                user_agent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-                viewport={"width": 1280, "height": 800},
-                locale="ja-JP",
-                timezone_id="Asia/Tokyo",
-                extra_http_headers={"Accept-Language": "ja-JP,ja;q=0.9"}
-            )
-            page = await context.new_page()
             
             while not self.stop_event.is_set():
-                self.status = "Scanning"
-                self.last_run_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                
-                # Reload config every run cycle to capture UI updates
+                context = None
+                page = None
                 try:
-                    with open(CONFIG_PATH, "r", encoding="utf-8") as f:
-                        config = json.load(f)
-                except Exception as e:
-                    logger.error(f"Failed to reload config: {e}")
-                    self.status = "Running"
-                    await asyncio.sleep(10)
-                    continue
+                    # Create a clean context and page for this scan cycle to avoid page memory leaks
+                    context = await browser.new_context(
+                        user_agent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+                        viewport={"width": 1280, "height": 800},
+                        locale="ja-JP",
+                        timezone_id="Asia/Tokyo",
+                        extra_http_headers={"Accept-Language": "ja-JP,ja;q=0.9"}
+                    )
+                    page = await context.new_page()
+                    
+                    self.status = "Scanning"
+                    self.last_run_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                    
+                    # Reload config every run cycle to capture UI updates
+                    try:
+                        with open(CONFIG_PATH, "r", encoding="utf-8") as f:
+                            config = json.load(f)
+                    except Exception as e:
+                        logger.error(f"Failed to reload config: {e}")
+                        self.status = "Running"
+                        await asyncio.sleep(10)
+                        continue
 
-                searches = config.get("searches", [])
-                interval_minutes = config.get("check_interval_minutes", 15)
-                
-                for idx, search_item in enumerate(searches):
-                    if self.stop_event.is_set():
-                        break
-                        
-                    keyword = search_item.get("keyword")
-                    search_query = search_item.get("japanese_keyword") or keyword
-                    min_price = search_item.get("min_price", 0)
-                    max_price = search_item.get("max_price", 999999)
+                    searches = config.get("searches", [])
+                    interval_minutes = config.get("check_interval_minutes", 15)
                     
-                    logger.info(f"[UI Scraper] Scanning: '{search_query}' (Price: {min_price} - {max_price} JPY)")
-                    
-                    # 1. Yahoo Auctions
-                    yahoo_items = await scraper.scrape_yahoo_auctions(page, search_query, min_price, max_price)
-                    # Polite interruptible sleeps
-                    for _ in range(random.randint(3, 7)):
+                    for idx, search_item in enumerate(searches):
                         if self.stop_event.is_set():
                             break
-                        await asyncio.sleep(1)
-                    
-                    if self.stop_event.is_set():
-                        break
-                        
-                    # 2. Yahoo! Fleamarket
-                    fleamarket_items = await scraper.scrape_yahoo_fleamarket(page, search_query, min_price, max_price)
-                    
-                    all_found = yahoo_items + fleamarket_items
-                    
-                    # Parse excluded keywords for this search
-                    exclude_str = search_item.get("exclude_keywords", "")
-                    excludes = [k.strip().lower() for k in exclude_str.split(",") if k.strip()] if exclude_str else []
-                    
-                    new_items_count = 0
-                    for item in all_found:
-                        if self.stop_event.is_set():
-                            break
-                        marketplace = item["marketplace"]
-                        item_id = item["item_id"]
-                        title = item["title"]
-                        price = item["price"]
-                        url = item["url"]
-                        
-                        # Excluded keyword check (case-insensitive)
-                        if excludes:
-                            title_lower = title.lower()
-                            if any(ex in title_lower for ex in excludes):
-                                logger.info(f"[UI Scraper] Skipping '{title}' as it contains an excluded keyword.")
-                                continue
-                        
-                        seen = database.is_item_seen(marketplace, item_id)
-                        if not seen:
-                            # Clean title and fetch market price specifically for this item
-                            cleaned_title = scraper.clean_title_for_search(title)
-                            logger.info(f"[UI Scraper] Fetching market price for new item '{title}' (query: '{cleaned_title}')")
-                            item_market_price = await scraper.get_market_price(page, cleaned_title)
-                            item["market_price"] = item_market_price if item_market_price > 0 else None
-                            item["estimated_profit"] = (item_market_price - price) if item_market_price > 0 else None
                             
-                            new_items_count += 1
-                            profit_str = f" (Profit: ¥{item['estimated_profit']:,})" if item["estimated_profit"] is not None else ""
-                            logger.info(f"[UI Scraper] [NEW] [{marketplace}] {title} - ¥{price:,}{profit_str}")
-                            notifier.notify_all(config, item)
-                            database.mark_item_as_seen(marketplace, item_id, title, price, url, item["market_price"], item["estimated_profit"])
-                            
-                            # Polite delay after querying comparison site
-                            for _ in range(random.randint(2, 4)):
-                                if self.stop_event.is_set():
-                                    break
-                                await asyncio.sleep(1)
-                        else:
-                            item["market_price"] = None
-                            item["estimated_profit"] = None
-                            
-                    logger.info(f"[UI Scraper] Finished '{search_query}'. Discovered {new_items_count} new items.")
-                    
-                    # Wait between search keywords
-                    if idx < len(searches) - 1:
-                        for _ in range(random.randint(5, 10)):
+                        keyword = search_item.get("keyword")
+                        search_query = search_item.get("japanese_keyword") or keyword
+                        min_price = search_item.get("min_price", 0)
+                        max_price = search_item.get("max_price", 999999)
+                        
+                        logger.info(f"[UI Scraper] Scanning: '{search_query}' (Price: {min_price} - {max_price} JPY)")
+                        
+                        # 1. Yahoo Auctions
+                        yahoo_items = await scraper.scrape_yahoo_auctions(page, search_query, min_price, max_price)
+                        # Polite interruptible sleeps
+                        for _ in range(random.randint(3, 7)):
                             if self.stop_event.is_set():
                                 break
                             await asyncio.sleep(1)
+                        
+                        if self.stop_event.is_set():
+                            break
+                            
+                        # 2. Yahoo! Fleamarket
+                        fleamarket_items = await scraper.scrape_yahoo_fleamarket(page, search_query, min_price, max_price)
+                        
+                        all_found = yahoo_items + fleamarket_items
+                        
+                        # Parse excluded keywords for this search
+                        exclude_str = search_item.get("exclude_keywords", "")
+                        excludes = [k.strip().lower() for k in exclude_str.split(",") if k.strip()] if exclude_str else []
+                        
+                        new_items_count = 0
+                        for item in all_found:
+                            if self.stop_event.is_set():
+                                break
+                            marketplace = item["marketplace"]
+                            item_id = item["item_id"]
+                            title = item["title"]
+                            price = item["price"]
+                            url = item["url"]
+                            
+                            # Excluded keyword check (case-insensitive)
+                            if excludes:
+                                title_lower = title.lower()
+                                if any(ex in title_lower for ex in excludes):
+                                    logger.info(f"[UI Scraper] Skipping '{title}' as it contains an excluded keyword.")
+                                    continue
+                            
+                            seen = database.is_item_seen(marketplace, item_id)
+                            if not seen:
+                                # Clean title and fetch market price specifically for this item
+                                cleaned_title = scraper.clean_title_for_search(title)
+                                logger.info(f"[UI Scraper] Fetching market price for new item '{title}' (query: '{cleaned_title}')")
+                                item_market_price = await scraper.get_market_price(page, cleaned_title)
+                                item["market_price"] = item_market_price if item_market_price > 0 else None
+                                item["estimated_profit"] = (item_market_price - price) if item_market_price > 0 else None
+                                
+                                new_items_count += 1
+                                profit_str = f" (Profit: ¥{item['estimated_profit']:,})" if item["estimated_profit"] is not None else ""
+                                logger.info(f"[UI Scraper] [NEW] [{marketplace}] {title} - ¥{price:,}{profit_str}")
+                                notifier.notify_all(config, item)
+                                database.mark_item_as_seen(marketplace, item_id, title, price, url, item["market_price"], item["estimated_profit"])
+                                
+                                # Polite delay after querying comparison site
+                                for _ in range(random.randint(2, 4)):
+                                    if self.stop_event.is_set():
+                                        break
+                                    await asyncio.sleep(1)
+                            else:
+                                item["market_price"] = None
+                                item["estimated_profit"] = None
+                                
+                        logger.info(f"[UI Scraper] Finished '{search_query}'. Discovered {new_items_count} new items.")
+                        
+                        # Wait between search keywords
+                        if idx < len(searches) - 1:
+                            for _ in range(random.randint(5, 10)):
+                                if self.stop_event.is_set():
+                                    break
+                                await asyncio.sleep(1)
+                except Exception as cycle_err:
+                    logger.error(f"Error during scan cycle: {cycle_err}")
+                finally:
+                    # Securely close context and page to release memory
+                    if page:
+                        try:
+                            await page.close()
+                        except Exception:
+                            pass
+                    if context:
+                        try:
+                            await context.close()
+                        except Exception:
+                            pass
                 
                 if self.stop_event.is_set():
                     break
