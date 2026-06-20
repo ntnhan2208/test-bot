@@ -1,0 +1,1897 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BOT SĂN ĐỒ - Dashboard</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        :root {
+            --bg-base: #070c19;
+            --bg-sidebar: #10172e;
+            --bg-panel: #111c44;
+            --bg-hover: #1c2b67;
+            --border-color: #1e295d;
+            
+            --text-primary: #ffffff;
+            --text-secondary: #8b9bb4;
+            
+            --primary: #1877f2;
+            --primary-hover: #155fc4;
+            --accent-light: #e7f3ff;
+            
+            --mercari: #ef4444;
+            --rakuma: #b91c1c;
+            --yahoo: #eab308;
+            --yahoo-flea: #ec4899;
+            
+            --status-green: #00e676;
+            --status-yellow: #ffb300;
+            --status-red: #ff3d00;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: 'Inter', system-ui, -apple-system, sans-serif;
+            -webkit-font-smoothing: antialiased;
+        }
+
+        body {
+            background-color: var(--bg-base);
+            color: var(--text-primary);
+            min-height: 100vh;
+            display: flex;
+            overflow-x: hidden;
+        }
+
+        /* SIDEBAR STYLE */
+        .sidebar {
+            width: 240px;
+            background-color: var(--bg-sidebar);
+            border-right: 1px solid var(--border-color);
+            display: flex;
+            flex-direction: column;
+            position: fixed;
+            top: 0;
+            bottom: 0;
+            left: 0;
+            z-index: 1000;
+            padding: 20px 0;
+        }
+
+        .sidebar-logo {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 0 20px 24px 20px;
+            border-bottom: 1px solid var(--border-color);
+            font-weight: 800;
+            font-size: 1.2rem;
+            letter-spacing: 0.5px;
+            color: var(--text-primary);
+        }
+
+        .sidebar-logo svg {
+            width: 28px;
+            height: 28px;
+            fill: var(--primary);
+        }
+
+        .sidebar-menu {
+            list-style: none;
+            padding: 20px 10px;
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            flex: 1;
+        }
+
+        .menu-item {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 12px 16px;
+            color: var(--text-secondary);
+            text-decoration: none;
+            font-weight: 500;
+            font-size: 0.9rem;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .menu-item:hover {
+            background-color: var(--bg-hover);
+            color: var(--text-primary);
+        }
+
+        .menu-item.active {
+            background-color: var(--primary);
+            color: var(--text-primary);
+        }
+
+        .menu-item svg {
+            width: 18px;
+            height: 18px;
+            stroke: currentColor;
+            stroke-width: 2;
+            fill: none;
+        }
+
+        /* Sidebar Bot Status widget */
+        .sidebar-bot-widget {
+            padding: 20px;
+            border-top: 1px solid var(--border-color);
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .bot-indicator {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 0.85rem;
+            font-weight: 600;
+        }
+
+        .bot-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background-color: var(--status-red);
+        }
+
+        .bot-dot.active {
+            background-color: var(--status-green);
+            box-shadow: 0 0 8px var(--status-green);
+            animation: pulse 1.8s infinite;
+        }
+
+        .bot-dot.scanning {
+            background-color: var(--status-yellow);
+            box-shadow: 0 0 8px var(--status-yellow);
+            animation: pulse 1.2s infinite;
+        }
+
+        .bot-uptime {
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+            margin-bottom: 4px;
+        }
+
+        /* MAIN CONTENT STYLE */
+        .main-wrapper {
+            margin-left: 240px;
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            min-height: 100vh;
+        }
+
+        /* TOPBAR STYLE */
+        .topbar {
+            height: 64px;
+            background-color: var(--bg-sidebar);
+            border-bottom: 1px solid var(--border-color);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0 24px;
+            position: sticky;
+            top: 0;
+            z-index: 900;
+        }
+
+        .topbar-left {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+        }
+
+        .breadcrumb {
+            font-weight: 600;
+            font-size: 1.05rem;
+        }
+
+        .topbar-right {
+            display: flex;
+            align-items: center;
+            gap: 20px;
+        }
+
+        .notif-bell {
+            position: relative;
+            cursor: pointer;
+            color: var(--text-secondary);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: color 0.2s;
+        }
+
+        .notif-bell:hover {
+            color: var(--text-primary);
+        }
+
+        .notif-bell svg {
+            width: 22px;
+            height: 22px;
+            stroke: currentColor;
+            stroke-width: 2;
+            fill: none;
+        }
+
+        .notif-badge {
+            position: absolute;
+            top: -6px;
+            right: -6px;
+            background-color: var(--status-red);
+            color: white;
+            font-size: 0.7rem;
+            font-weight: 700;
+            padding: 2px 5px;
+            border-radius: 10px;
+            border: 2px solid var(--bg-sidebar);
+        }
+
+
+
+        .user-profile {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 0.85rem;
+            font-weight: 600;
+            cursor: pointer;
+        }
+
+        .user-avatar {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            background-color: var(--primary);
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 700;
+        }
+
+        /* CONTENT CONTAINER */
+        .content-container {
+            padding: 24px;
+            display: flex;
+            flex-direction: column;
+            gap: 24px;
+        }
+
+        /* KPI ROW */
+        .kpi-row {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 16px;
+        }
+
+        .kpi-card {
+            background-color: var(--bg-panel);
+            border: 1px solid var(--border-color);
+            border-radius: 10px;
+            padding: 20px;
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            position: relative;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.15);
+            transition: transform 0.2s ease;
+        }
+
+        .kpi-card:hover {
+            transform: translateY(-2px);
+        }
+
+        .kpi-icon-wrapper {
+            width: 48px;
+            height: 48px;
+            border-radius: 10px;
+            background-color: rgba(24, 119, 242, 0.1);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: var(--primary);
+        }
+
+        .kpi-icon-wrapper svg {
+            width: 24px;
+            height: 24px;
+            stroke: currentColor;
+            stroke-width: 2;
+            fill: none;
+        }
+
+        .kpi-info {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        .kpi-title {
+            font-size: 0.75rem;
+            font-weight: 700;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .kpi-value {
+            font-size: 1.6rem;
+            font-weight: 700;
+        }
+
+        .kpi-sub {
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+        }
+
+        .kpi-change {
+            color: var(--status-green);
+            font-weight: 700;
+        }
+
+        /* MIDDLE GRIDS */
+        .middle-grid {
+            display: grid;
+            grid-template-columns: 1.5fr 1fr 1fr;
+            gap: 20px;
+        }
+
+        .panel-card {
+            background-color: var(--bg-panel);
+            border: 1px solid var(--border-color);
+            border-radius: 10px;
+            padding: 20px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.15);
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+
+        .panel-title {
+            font-size: 0.95rem;
+            font-weight: 700;
+            border-bottom: 1px solid var(--border-color);
+            padding-bottom: 12px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        /* CONFIG WIDGETS */
+        .config-list {
+            display: flex;
+            flex-direction: column;
+            gap: 14px;
+            font-size: 0.85rem;
+        }
+
+        .config-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 8px 0;
+            border-bottom: 1px dashed var(--border-color);
+        }
+
+        .config-row:last-child {
+            border-bottom: none;
+        }
+
+        .config-label {
+            color: var(--text-secondary);
+        }
+
+        .config-value-wrapper {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-weight: 600;
+        }
+
+        .config-edit-btn {
+            background: none;
+            border: none;
+            color: var(--text-secondary);
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: color 0.2s;
+        }
+
+        .config-edit-btn:hover {
+            color: var(--text-primary);
+        }
+
+        .config-edit-btn svg {
+            width: 14px;
+            height: 14px;
+            stroke: currentColor;
+            stroke-width: 2;
+            fill: none;
+        }
+
+        /* TABLES ROW */
+        .tables-grid {
+            display: grid;
+            grid-template-columns: 1fr 1.2fr;
+            gap: 20px;
+        }
+
+        .table-container {
+            width: 100%;
+            overflow-x: auto;
+            border-radius: 8px;
+            border: 1px solid var(--border-color);
+        }
+
+        .data-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.85rem;
+            text-align: left;
+        }
+
+        .data-table th, .data-table td {
+            padding: 12px 14px;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .data-table th {
+            font-weight: 700;
+            color: var(--text-secondary);
+            background-color: rgba(16, 23, 46, 0.5);
+            font-size: 0.75rem;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .data-table tbody tr:hover td {
+            background-color: var(--bg-hover);
+        }
+
+        /* Badges */
+        .badge {
+            display: inline-block;
+            padding: 4px 8px;
+            border-radius: 6px;
+            font-size: 0.75rem;
+            font-weight: 700;
+            color: white;
+            text-align: center;
+        }
+
+        .badge-yahoo-auctions {
+            background-color: var(--yahoo);
+            color: #111;
+        }
+
+        .badge-yahoo-flea {
+            background-color: var(--yahoo-flea);
+        }
+
+        .profit-positive {
+            color: var(--status-green);
+            font-weight: 700;
+        }
+
+        .profit-negative {
+            color: var(--status-red);
+            font-weight: 700;
+        }
+
+        /* Buttons */
+        .btn {
+            background-color: var(--primary);
+            color: white;
+            border: none;
+            padding: 10px 18px;
+            border-radius: 6px;
+            font-weight: 600;
+            font-size: 0.85rem;
+            cursor: pointer;
+            transition: background-color 0.2s ease;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            text-decoration: none;
+        }
+
+        .btn:hover {
+            background-color: var(--primary-hover);
+        }
+
+        .btn:disabled {
+            background-color: var(--bg-hover);
+            color: var(--text-secondary);
+            cursor: not-allowed;
+        }
+
+        .btn-sm {
+            padding: 6px 12px;
+            font-size: 0.75rem;
+            border-radius: 4px;
+        }
+
+        .btn-danger {
+            background-color: var(--status-red);
+        }
+
+        .btn-danger:hover {
+            background-color: #d83500;
+        }
+
+        .btn-purple {
+            background-color: #6366f1;
+        }
+
+        .btn-purple:hover {
+            background-color: #4f46e5;
+        }
+
+        .btn-outline {
+            background: none;
+            border: 1px solid var(--border-color);
+            color: var(--text-primary);
+        }
+
+        .btn-outline:hover {
+            background-color: var(--bg-hover);
+        }
+
+        /* Action bar bottom */
+        .action-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        }
+
+        .channel-status-wrapper {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 12px;
+            font-size: 0.85rem;
+        }
+
+        .channel-card {
+            background-color: var(--bg-hover);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 14px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .channel-card svg {
+            width: 24px;
+            height: 24px;
+        }
+
+        .channel-info {
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+        }
+
+        .channel-name {
+            font-weight: 600;
+        }
+
+        .channel-state {
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+            font-weight: 700;
+        }
+
+        .channel-state.active {
+            color: var(--status-green);
+        }
+
+        .quick-actions {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 12px;
+        }
+
+        /* MODAL STYLE */
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: rgba(0, 0, 0, 0.7);
+            z-index: 2000;
+            align-items: center;
+            justify-content: center;
+            animation: fadeIn 0.2s ease;
+        }
+
+        .modal.active {
+            display: flex;
+        }
+
+        .modal-content {
+            background-color: var(--bg-panel);
+            border: 1px solid var(--border-color);
+            border-radius: 10px;
+            width: 100%;
+            max-width: 500px;
+            padding: 24px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.5);
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+
+        .modal-header {
+            font-size: 1.1rem;
+            font-weight: 700;
+            border-bottom: 1px solid var(--border-color);
+            padding-bottom: 12px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .modal-close {
+            background: none;
+            border: none;
+            color: var(--text-secondary);
+            cursor: pointer;
+            font-size: 1.3rem;
+        }
+
+        .modal-body {
+            display: flex;
+            flex-direction: column;
+            gap: 14px;
+        }
+
+        .modal-footer {
+            display: flex;
+            justify-content: flex-end;
+            gap: 10px;
+            border-top: 1px solid var(--border-color);
+            padding-top: 12px;
+        }
+
+        .form-group {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+
+        .form-label {
+            font-size: 0.8rem;
+            font-weight: 600;
+            color: var(--text-secondary);
+        }
+
+        .form-input {
+            width: 100%;
+            background-color: var(--bg-base);
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            padding: 10px 12px;
+            color: var(--text-primary);
+            font-size: 0.9rem;
+            outline: none;
+        }
+
+        .form-input:focus {
+            border-color: var(--primary);
+        }
+
+        /* LOGS PANEL CONSOLE */
+        .logs-panel {
+            display: none;
+        }
+
+        .logs-panel.active {
+            display: block;
+        }
+
+        .log-terminal {
+            background-color: #070c19;
+            color: #00ff66;
+            font-family: 'Courier New', Courier, monospace;
+            padding: 16px;
+            border-radius: 8px;
+            border: 1px solid var(--border-color);
+            height: 480px;
+            overflow-y: auto;
+            font-size: 0.8rem;
+            line-height: 1.4;
+            box-shadow: inset 0 0 10px rgba(0,0,0,0.8);
+        }
+
+        /* PAGINATION */
+        .pagination {
+            display: flex;
+            justify-content: flex-end;
+            gap: 6px;
+            margin-top: 12px;
+        }
+
+        .page-btn {
+            background-color: var(--bg-hover);
+            border: 1px solid var(--border-color);
+            color: var(--text-secondary);
+            padding: 4px 10px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 0.8rem;
+            font-weight: 600;
+        }
+
+        .page-btn.active {
+            background-color: var(--primary);
+            color: white;
+            border-color: var(--primary);
+        }
+
+        @keyframes pulse {
+            0% { transform: scale(0.95); opacity: 0.5; }
+            50% { transform: scale(1.1); opacity: 1; }
+            100% { transform: scale(0.95); opacity: 0.5; }
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+
+        /* MOBILE ADJUSTMENTS */
+        @media (max-width: 1200px) {
+            .middle-grid {
+                grid-template-columns: 1fr;
+            }
+            .tables-grid {
+                grid-template-columns: 1fr;
+            }
+            .kpi-row {
+                grid-template-columns: repeat(2, 1fr);
+            }
+        }
+
+        @media (max-width: 768px) {
+            .sidebar {
+                display: none;
+            }
+            .main-wrapper {
+                margin-left: 0;
+            }
+        }
+    </style>
+</head>
+<body>
+
+    <!-- SIDEBAR LEFT -->
+    <div class="sidebar">
+        <div class="sidebar-logo">
+            <svg viewBox="0 0 24 24"><path d="M12 2a10 10 0 0 1 10 10c0 5.523-4.477 10-10 10S2 17.523 2 12A10 10 0 0 1 12 2zm0 2a8 8 0 0 0-8 8c0 4.418 3.582 8 8 8s8-3.582 8-8a8 8 0 0 0-8-8zm1 3v4h3v2h-5V7h2z"/></svg>
+            BOT SĂN ĐỒ
+        </div>
+        <ul class="sidebar-menu">
+            <li class="menu-item active" onclick="switchView('products')" id="menu-products">
+                <svg viewBox="0 0 24 24"><path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/></svg>
+                Sản phẩm phát hiện
+            </li>
+            <li class="menu-item" onclick="switchView('keywords')" id="menu-keywords">
+                <svg viewBox="0 0 24 24"><path d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+                Từ khóa
+            </li>
+            <li class="menu-item" onclick="switchView('notifications')" id="menu-notifications">
+                <svg viewBox="0 0 24 24"><path d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"/></svg>
+                Thông báo
+            </li>
+            <li class="menu-item" onclick="switchView('logs')" id="menu-logs">
+                <svg viewBox="0 0 24 24"><path d="M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
+                VPS & Hệ thống
+            </li>
+            <!-- Tạm ẩn tab tổng quan -->
+            <li class="menu-item" onclick="switchView('dashboard')" id="menu-dashboard" style="display: none;">
+                <svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+                Tổng quan
+            </li>
+        </ul>
+
+        <!-- Sidebar Bot Info -->
+        <div class="sidebar-bot-widget">
+            <div class="bot-indicator">
+                <div class="bot-dot" id="sidebar-bot-dot"></div>
+                <span id="sidebar-bot-status">Offline</span>
+            </div>
+            <div class="bot-uptime">Uptime: <span id="sidebar-bot-uptime">Never</span></div>
+            <button class="btn btn-sm btn-purple" id="sidebar-btn-control" onclick="toggleBot()">Bật Bot</button>
+        </div>
+    </div>
+
+    <!-- MAIN WRAPPER -->
+    <div class="main-wrapper">
+        
+        <!-- TOP NAVBAR -->
+        <div class="topbar">
+            <div class="topbar-left">
+                <div class="breadcrumb" id="breadcrumb-title">Dashboard / Sản phẩm phát hiện</div>
+            </div>
+            <div class="topbar-right">
+                <!-- Notifications -->
+                <div class="notif-bell" onclick="switchView('products')">
+                    <svg viewBox="0 0 24 24"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+                    <span class="notif-badge" id="topbar-notif-count">0</span>
+                </div>
+
+                <!-- User Profile -->
+                <div class="user-profile">
+                    <div class="user-avatar">A</div>
+                    <span>Admin</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- MAIN CONTENT CONTAINER -->
+        <div class="content-container" id="main-view-container">
+            
+            <!-- ================= OVERVIEW VIEW ================= -->
+            <div id="view-dashboard" class="view-panel" style="display: flex; flex-direction: column; gap: 24px;">
+                
+                <!-- KPI CARDS ROW -->
+                <div class="kpi-row">
+                    <div class="kpi-card">
+                        <div class="kpi-icon-wrapper">
+                            <svg viewBox="0 0 24 24"><path d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+                        </div>
+                        <div class="kpi-info">
+                            <span class="kpi-title">Từ khóa</span>
+                            <span class="kpi-value" id="kpi-keywords-count">0</span>
+                            <span class="kpi-sub">Đang theo dõi <span class="kpi-change" id="kpi-keywords-change">+0 hôm nay</span></span>
+                        </div>
+                    </div>
+                    <div class="kpi-card">
+                        <div class="kpi-icon-wrapper" style="color:#00e676; background-color:rgba(0,230,118,0.1);">
+                            <svg viewBox="0 0 24 24"><path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/></svg>
+                        </div>
+                        <div class="kpi-info">
+                            <span class="kpi-title">Tin mới hôm nay</span>
+                            <span class="kpi-value" id="kpi-discovered-today">0</span>
+                            <span class="kpi-sub">Tin mới phát hiện <span class="kpi-change" id="kpi-discovered-change">+0%</span></span>
+                        </div>
+                    </div>
+                    <div class="kpi-card">
+                        <div class="kpi-icon-wrapper" style="color:#a855f7; background-color:rgba(168,85,247,0.1);">
+                            <svg viewBox="0 0 24 24"><path d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+                        </div>
+                        <div class="kpi-info">
+                            <span class="kpi-title">Mức hiệu quả</span>
+                            <span class="kpi-value" id="kpi-success-rate">82%</span>
+                            <span class="kpi-sub">Tỷ lệ chính xác <span class="kpi-change">+6%</span></span>
+                        </div>
+                    </div>
+                    <div class="kpi-card">
+                        <div class="kpi-icon-wrapper" style="color:#00e676; background-color:rgba(0,230,118,0.1);" id="kpi-bot-indicator">
+                            <svg viewBox="0 0 24 24"><path d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/></svg>
+                        </div>
+                        <div class="kpi-info">
+                            <span class="kpi-title">Trạng thái Bot</span>
+                            <span class="kpi-value" style="color:var(--status-green);" id="kpi-bot-status">Online</span>
+                            <span class="kpi-sub" id="kpi-bot-uptime">Uptime: 15 ngày 12 giờ</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- MIDDLE GRID (CHART & CONFIG) -->
+                <div class="middle-grid">
+                    <!-- Chart -->
+                    <div class="panel-card" style="grid-column: span 1;">
+                        <div class="panel-title">SỐ LƯỢNG TIN PHÁT HIỆN THEO NGÀY</div>
+                        <div style="height: 180px; width: 100%; display: flex; align-items: center; justify-content: center;">
+                            <canvas id="bar-chart"></canvas>
+                        </div>
+                    </div>
+                    <!-- Config -->
+                    <div class="panel-card">
+                        <div class="panel-title">CẤU HÌNH CHUNG</div>
+                        <div class="config-list">
+                            <div class="config-row">
+                                <span class="config-label">Giá tối đa (¥)</span>
+                                <div class="config-value-wrapper">
+                                    <span id="conf-max-price">Không giới hạn</span>
+                                    <button class="config-edit-btn" onclick="switchView('settings')">
+                                        <svg viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7M18.5 2.5a2.121 2.121 0 113 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                                    </button>
+                                </div>
+                            </div>
+                            <div class="config-row">
+                                <span class="config-label">Giá tối thiểu (¥)</span>
+                                <div class="config-value-wrapper">
+                                    <span id="conf-min-price">1,000</span>
+                                    <button class="config-edit-btn" onclick="switchView('settings')">
+                                        <svg viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7M18.5 2.5a2.121 2.121 0 113 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                                    </button>
+                                </div>
+                            </div>
+                            <div class="config-row">
+                                <span class="config-label">Tần suất quét</span>
+                                <div class="config-value-wrapper">
+                                    <span id="conf-scan-interval">15 phút</span>
+                                    <button class="config-edit-btn" onclick="switchView('settings')">
+                                        <svg viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7M18.5 2.5a2.121 2.121 0 113 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                                    </button>
+                                </div>
+                            </div>
+                            <div class="config-row">
+                                <span class="config-label">Số lượng luồng</span>
+                                <div class="config-value-wrapper">
+                                    <span>15</span>
+                                    <button class="config-edit-btn"><svg viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7M18.5 2.5a2.121 2.121 0 113 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <!-- Advanced Filters -->
+                    <div class="panel-card">
+                        <div class="panel-title">BỘ LỌC NÂNG CAO</div>
+                        <div class="config-list">
+                            <div class="config-row">
+                                <span class="config-label">Nguồn ưu tiên</span>
+                                <div class="config-value-wrapper">
+                                    <span>Tất cả</span>
+                                    <button class="config-edit-btn"><svg viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7M18.5 2.5a2.121 2.121 0 113 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button>
+                                </div>
+                            </div>
+                            <div class="config-row">
+                                <span class="config-label">Loại sản phẩm</span>
+                                <div class="config-value-wrapper">
+                                    <span>Tất cả</span>
+                                    <button class="config-edit-btn"><svg viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7M18.5 2.5a2.121 2.121 0 113 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button>
+                                </div>
+                            </div>
+                            <div class="config-row">
+                                <span class="config-label">Từ khóa loại trừ</span>
+                                <div class="config-value-wrapper">
+                                    <span>Bật</span>
+                                    <button class="config-edit-btn"><svg viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7M18.5 2.5a2.121 2.121 0 113 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button>
+                                </div>
+                            </div>
+                            <div class="config-row">
+                                <span class="config-label">Tình trạng sản phẩm</span>
+                                <div class="config-value-wrapper">
+                                    <span>Tất cả</span>
+                                    <button class="config-edit-btn"><svg viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7M18.5 2.5a2.121 2.121 0 113 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- TABLES GRID -->
+                <div class="tables-grid">
+                    <!-- Left: Keyword Manager -->
+                    <div class="panel-card">
+                        <div class="panel-title">
+                            QUẢN LÝ TỪ KHÓA
+                            <div style="display:flex; gap:8px;">
+                                <button class="btn btn-sm" onclick="openAddKeywordModal()">+ Thêm từ khóa</button>
+                                <button class="btn btn-sm btn-outline">Import</button>
+                            </div>
+                        </div>
+                        <div class="table-container">
+                            <table class="data-table" id="keywords-table">
+                                <thead>
+                                    <tr>
+                                        <th style="width: 50px;">#</th>
+                                        <th>Từ khóa</th>
+                                        <th>Nguồn quét</th>
+                                        <th>Giá tối đa (¥)</th>
+                                        <th>Trạng thái</th>
+                                        <th style="width: 100px;">Thao tác</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <!-- Dynamic content -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <!-- Right: Discovered Products -->
+                    <div class="panel-card">
+                        <div class="panel-title">
+                            DANH SÁCH SẢN PHẨM PHÁT HIỆN
+                            <button class="btn btn-sm btn-outline" onclick="switchView('products')">Xem tất cả</button>
+                        </div>
+                        <div class="table-container">
+                            <table class="data-table" id="discovered-table">
+                                <thead>
+                                    <tr>
+                                        <th>Thời gian</th>
+                                        <th>Sản phẩm</th>
+                                        <th>Giá quét</th>
+                                        <th style="text-align: center;">Giá thị trường (¥) / Xem so sánh</th>
+                                        <th>Lợi nhuận (¥)</th>
+                                        <th>Nguồn</th>
+                                        <th style="width: 60px;">Link</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <!-- Dynamic content -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- BOTTOM ROW (NOTIFICATIONS & QUICK ACTIONS) -->
+                <div class="action-row">
+                    <!-- Notifications state -->
+                    <div class="panel-card">
+                        <div class="panel-title">KÊNH THÔNG BÁO</div>
+                        <div class="channel-status-wrapper">
+                            <div class="channel-card" style="justify-content: center; height: 100%; min-height: 80px;">
+                                <svg viewBox="0 0 24 24" fill="#00c300" style="width: 32px; height: 32px;"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 15h-2v-6h2v6zm0-8h-2V7h2v2zm4 8h-2v-6h2v6zm0-8h-2V7h2v2z"/></svg>
+                                <div class="channel-info" style="gap: 4px;">
+                                    <span class="channel-name" style="font-size: 1.1rem;">LINE Notify</span>
+                                    <span class="channel-state active" id="channel-line-state" style="font-size: 0.9rem;">Bật</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <!-- Quick actions -->
+                    <div class="panel-card">
+                        <div class="panel-title">THAO TÁC NHANH</div>
+                        <div class="quick-actions">
+                            <button class="btn btn-outline" onclick="alert('Đang kiểm tra hệ thống...')">Kiểm tra hệ thống</button>
+                            <button class="btn btn-outline" onclick="refreshData()">Làm mới dữ liệu</button>
+                            <button class="btn btn-outline" onclick="switchView('notifications')">Cài đặt bot</button>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+
+            <!-- ================= VIEW: KEYWORDS (FROM SEARCH CONFIG) ================= -->
+            <div id="view-keywords" class="view-panel" style="display:none;">
+                <div class="panel-card" style="width: 100%;">
+                    <div class="panel-title">DANH SÁCH TỪ KHÓA THEO DÕI</div>
+                    <div style="display:flex; justify-content:flex-end; gap:8px; margin-bottom:12px;">
+                        <button class="btn" onclick="openAddKeywordModal()">+ Thêm từ khóa mới</button>
+                    </div>
+                    <div class="table-container">
+                        <table class="data-table" id="view-keywords-table-detail">
+                            <thead>
+                                <tr>
+                                    <th>#</th>
+                                    <th>Từ khóa tìm kiếm</th>
+                                    <th>Tên tiếng Nhật (Query)</th>
+                                    <th>Giá sàn (¥)</th>
+                                    <th>Giá trần (¥)</th>
+                                    <th>Từ khóa loại trừ</th>
+                                    <th>Thao tác</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <!-- Loaded dynamically -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ================= VIEW: ALL DISCOVERED PRODUCTS ================= -->
+            <div id="view-products" class="view-panel" style="display:none;">
+                <div class="panel-card" style="width: 100%;">
+                    <div class="panel-title">
+                        SẢN PHẨM GIÁ HỜI PHÁT HIỆN
+                        <div style="display:flex; gap:10px; align-items:center;">
+                            <input type="text" class="form-input" id="history-search" placeholder="Tìm sản phẩm..." oninput="loadHistory()" style="max-width:200px; padding: 6px 12px; font-size: 0.8rem;">
+                            <select class="form-input" id="history-filter-marketplace" onchange="loadHistory()" style="max-width:150px; padding: 6px 12px; font-size: 0.8rem;">
+                                <option value="">Tất cả nguồn</option>
+                                <option value="Yahoo Auctions">Yahoo Auctions</option>
+                                <option value="Yahoo! Fleamarket">Yahoo! Fleamarket</option>
+                            </select>
+                            <button class="btn btn-sm btn-danger" onclick="clearDatabase()">Xóa Database</button>
+                        </div>
+                    </div>
+                    <div class="table-container">
+                        <table class="data-table" id="view-products-table-detail">
+                            <thead>
+                                <tr>
+                                    <th>Hình ảnh</th>
+                                    <th>Sàn</th>
+                                    <th>Tên sản phẩm</th>
+                                    <th>Giá bán</th>
+                                    <th style="text-align: center;">Giá thị trường (¥) / Xem so sánh</th>
+                                    <th>Lợi nhuận dự kiến (¥)</th>
+                                    <th>Thời gian cào</th>
+                                    <th>Link</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <!-- Loaded dynamically -->
+                            </tbody>
+                        </table>
+                    </div>
+                    <!-- Pagination -->
+                    <div class="pagination" id="history-pagination">
+                        <!-- Loaded dynamically -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- ================= VIEW: NOTIFICATION & WEBHOOK SETTINGS ================= -->
+            <div id="view-notifications" class="view-panel" style="display:none; justify-content:center; align-items:center; width:100%;">
+                <div class="panel-card" style="width:100%; max-width:600px; box-shadow: 0 10px 25px rgba(0,0,0,0.4);">
+                    <div class="panel-title">CẤU HÌNH LINE NOTIFY & TẦN SUẤT QUÉT</div>
+                    <div class="modal-body" style="padding:0; display:flex; flex-direction:column; gap:16px;">
+                        <div class="form-group">
+                            <label class="form-label">LINE Channel Access Token</label>
+                            <input type="password" class="form-input" id="config-line-token" placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">LINE User ID (Destination)</label>
+                            <input type="text" class="form-input" id="config-line-user" placeholder="U123456789abcdef0123456789abcdef0">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Khoảng thời gian quét (Phút)</label>
+                            <input type="number" class="form-input" id="config-interval" value="15" min="2">
+                        </div>
+                    </div>
+                    <div style="margin-top:20px; display:flex; gap:10px; justify-content:flex-end; border-top: 1px solid var(--border-color); padding-top:16px;">
+                        <button class="btn btn-outline" onclick="switchView('products')">Quay lại</button>
+                        <button class="btn" onclick="saveConfig()">Lưu cấu hình</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ================= VIEW: SYSTEM LOGS CONSOLE ================= -->
+            <div id="view-logs" class="view-panel" style="display:none;">
+                <div class="panel-card" style="width: 100%;">
+                    <div class="panel-title">
+                        VPS LOGS CONSOLE
+                        <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-size:0.8rem; font-weight:normal;">
+                            <input type="checkbox" id="auto-scroll" checked> Tự động cuộn
+                        </label>
+                    </div>
+                    <div class="log-terminal" id="terminal-screen">Đang tải nhật ký hệ thống...</div>
+                    <div style="margin-top:12px; display:flex; gap:10px;">
+                        <button class="btn btn-sm" onclick="loadLogs()">Làm mới</button>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+    <!-- ADD KEYWORD MODAL -->
+    <div class="modal" id="add-keyword-modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <span>Thêm từ khóa theo dõi mới</span>
+                <button class="modal-close" onclick="closeAddKeywordModal()">×</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label class="form-label">Từ khóa tiếng Anh/Tên gợi nhớ (e.g. MacBook Air M2)</label>
+                    <input type="text" class="form-input" id="search-keyword" placeholder="Nhập từ khóa">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Tên sản phẩm bằng tiếng Nhật (Ví dụ: マックブック)</label>
+                    <input type="text" class="form-input" id="search-jp-keyword" placeholder="Có thể bỏ trống, bot sẽ tự dịch nếu để trống">
+                </div>
+                <div class="input-row" style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
+                    <div class="form-group">
+                        <label class="form-label">Giá tối thiểu (¥)</label>
+                        <input type="number" class="form-input" id="search-min-price" value="1000">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Giá tối đa (¥)</label>
+                        <input type="number" class="form-input" id="search-max-price" value="50000">
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Từ khóa loại trừ (cách nhau bởi dấu phẩy, ví dụ: ốp, case, cường lực)</label>
+                    <input type="text" class="form-input" id="search-exclude-keywords" placeholder="Ví dụ: ốp, case, cường lực">
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-outline" onclick="closeAddKeywordModal()">Hủy</button>
+                <button class="btn" onclick="addSearch()">Thêm</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- SCRIPTS -->
+    <script>
+        let currentView = 'products';
+        let configData = {};
+        let statusIntervalId = null;
+        let logsIntervalId = null;
+        let chartInstance = null;
+        let editSearchIdx = null;
+
+        document.addEventListener('DOMContentLoaded', () => {
+            fetchStatus();
+            fetchConfig();
+            switchView('products');
+            
+            // Poll status every 4 seconds
+            statusIntervalId = setInterval(fetchStatus, 4000);
+        });
+
+        function initChart() {
+            const ctx = document.getElementById('bar-chart').getContext('2d');
+            const days = [];
+            const dataPoints = [];
+            for (let i = 6; i >= 0; i--) {
+                const d = new Date();
+                d.setDate(d.getDate() - i);
+                days.push(d.getDate() + '/' + (d.getMonth() + 1));
+            }
+            
+            const mockValues = [180, 220, 195, 310, 280, 340, 356];
+            
+            chartInstance = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: days,
+                    datasets: [{
+                        label: 'Sản phẩm phát hiện',
+                        data: mockValues,
+                        borderColor: '#1877f2',
+                        backgroundColor: 'rgba(24, 119, 242, 0.1)',
+                        borderWidth: 3,
+                        pointBackgroundColor: '#ffffff',
+                        pointBorderColor: '#1877f2',
+                        pointBorderWidth: 2,
+                        pointRadius: 5,
+                        tension: 0.3,
+                        fill: true
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { display: false }
+                    },
+                    scales: {
+                        y: {
+                            grid: { color: 'rgba(30, 41, 93, 0.3)' },
+                            ticks: { color: '#8b9bb4', font: { size: 10 } }
+                        },
+                        x: {
+                            grid: { display: false },
+                            ticks: { color: '#8b9bb4', font: { size: 10 } }
+                        }
+                    }
+                }
+            });
+        }
+
+        // View Switching
+        function switchView(viewId) {
+            currentView = viewId;
+            
+            const menuTitleMap = {
+                'dashboard': 'Tổng quan',
+                'keywords': 'Quản lý từ khóa',
+                'products': 'Sản phẩm phát hiện',
+                'notifications': 'Kênh thông báo & Webhook',
+                'logs': 'VPS & Nhật ký hệ thống'
+            };
+            document.getElementById('breadcrumb-title').textContent = 'Dashboard / ' + (menuTitleMap[viewId] || '');
+
+            // Sidebar Active class
+            document.querySelectorAll('.menu-item').forEach(item => item.classList.remove('active'));
+            const activeMenuItem = document.getElementById('menu-' + viewId);
+            if (activeMenuItem) activeMenuItem.classList.add('active');
+
+            // Hide/Show Views
+            document.querySelectorAll('.view-panel').forEach(panel => panel.style.display = 'none');
+            const targetPanel = document.getElementById('view-' + viewId);
+            if (targetPanel) {
+                if (viewId === 'notifications') {
+                    targetPanel.style.display = 'flex';
+                } else {
+                    targetPanel.style.display = 'block';
+                }
+            }
+
+            // Tab action callbacks
+            if (viewId === 'dashboard') {
+                loadBargains();
+            } else if (viewId === 'keywords') {
+                renderKeywordsTableDetail();
+            } else if (viewId === 'products') {
+                loadHistory();
+            } else if (viewId === 'notifications') {
+                populateConfigFields();
+            } else if (viewId === 'logs') {
+                loadLogs();
+                if (logsIntervalId) clearInterval(logsIntervalId);
+                logsIntervalId = setInterval(loadLogs, 2000);
+            }
+
+            if (viewId !== 'logs' && logsIntervalId) {
+                clearInterval(logsIntervalId);
+                logsIntervalId = null;
+            }
+        }
+
+        // Refresh dynamic content
+        function refreshData() {
+            fetchStatus();
+            loadBargains();
+            alert('Đã làm mới dữ liệu!');
+        }
+
+        // Fetch runner status
+        async function fetchStatus() {
+            try {
+                const response = await fetch('/api/status');
+                const data = await response.json();
+                
+                const dot = document.getElementById('sidebar-bot-dot');
+                const text = document.getElementById('sidebar-bot-status');
+                const btn = document.getElementById('sidebar-btn-control');
+                
+                const kpiDot = document.getElementById('kpi-bot-indicator');
+                const kpiText = document.getElementById('kpi-bot-status');
+                const kpiUptime = document.getElementById('kpi-bot-uptime');
+                
+                dot.className = 'bot-dot';
+                
+                if (data.status === 'Scanning') {
+                    dot.classList.add('scanning');
+                    text.textContent = 'Scanning...';
+                    btn.textContent = 'Dừng Bot';
+                    btn.className = 'btn btn-sm btn-danger';
+                    
+                    kpiText.textContent = 'Scanning...';
+                    kpiText.style.color = 'var(--status-yellow)';
+                } else if (data.status === 'Running') {
+                    dot.classList.add('active');
+                    text.textContent = 'Running (Idle)';
+                    btn.textContent = 'Dừng Bot';
+                    btn.className = 'btn btn-sm btn-danger';
+                    
+                    kpiText.textContent = 'Online';
+                    kpiText.style.color = 'var(--status-green)';
+                } else {
+                    text.textContent = 'Offline';
+                    btn.textContent = 'Bật Bot';
+                    btn.className = 'btn btn-sm btn-purple';
+                    
+                    kpiText.textContent = 'Offline';
+                    kpiText.style.color = 'var(--status-red)';
+                }
+
+                // Update Uptime
+                document.getElementById('sidebar-bot-uptime').textContent = data.last_run || 'Never';
+                kpiUptime.textContent = 'Quét lần cuối: ' + (data.last_run || 'Never');
+
+                // Update Stats
+                document.getElementById('kpi-keywords-count').textContent = data.active_searches;
+                document.getElementById('kpi-discovered-today').textContent = data.total_bargains;
+                document.getElementById('topbar-notif-count').textContent = data.total_bargains;
+                document.getElementById('conf-scan-interval').textContent = data.check_interval_minutes + ' phút';
+                
+            } catch (err) {
+                console.error("Error fetching status:", err);
+            }
+        }
+
+        // Toggle Bot
+        async function toggleBot() {
+            const btn = document.getElementById('sidebar-btn-control');
+            const isRunning = btn.textContent === 'Dừng Bot';
+            const action = isRunning ? 'stop' : 'start';
+            
+            btn.disabled = true;
+            try {
+                const response = await fetch('/api/control', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ action })
+                });
+                await response.json();
+                fetchStatus();
+            } catch (err) {
+                console.error("Error toggling bot:", err);
+            } finally {
+                btn.disabled = false;
+            }
+        }
+
+        // Fetch config
+        async function fetchConfig() {
+            try {
+                const response = await fetch('/api/config');
+                configData = await response.json();
+                renderKeywordsTable();
+                
+                // Update general config dashboard displays
+                const minPrice = configData.searches && configData.searches.length > 0 
+                    ? Math.min(...configData.searches.map(s => s.min_price || 0)) 
+                    : 1000;
+                const maxPrice = configData.searches && configData.searches.length > 0 
+                    ? Math.max(...configData.searches.map(s => s.max_price || 999999)) 
+                    : 50000;
+                    
+                document.getElementById('conf-min-price').textContent = minPrice.toLocaleString() + ' ¥';
+                document.getElementById('conf-max-price').textContent = maxPrice === 999999 ? 'Không giới hạn' : maxPrice.toLocaleString() + ' ¥';
+                
+                updateNotificationStates(configData);
+            } catch (err) {
+                console.error("Error fetching config:", err);
+            }
+        }
+
+        function updateNotificationStates(cfg) {
+            const line = document.getElementById('channel-line-state');
+            const hasLine = cfg.notifications?.line?.channel_access_token && !cfg.notifications.line.channel_access_token.includes('YOUR_LINE');
+
+            line.textContent = hasLine ? 'Bật' : 'Tắt';
+            line.className = 'channel-state ' + (hasLine ? 'active' : '');
+        }
+
+        // Load dynamic feed for overview table
+        async function loadBargains() {
+            const tbody = document.querySelector('#discovered-table tbody');
+            tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--text-secondary);">Đang tải dữ liệu sản phẩm...</td></tr>';
+            
+            try {
+                const response = await fetch('/api/items?limit=10');
+                const items = await response.json();
+                
+                if (items.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--text-secondary);">Chưa phát hiện sản phẩm nào. Hãy bật Bot để bắt đầu quét!</td></tr>';
+                    return;
+                }
+                
+                tbody.innerHTML = '';
+                items.forEach(item => {
+                    const badgeClass = item.marketplace === 'Yahoo Auctions' ? 'badge-yahoo-auctions' : 'badge-yahoo-flea';
+                    
+                    let marketPriceDisplay = '-';
+                    if (item.market_price) {
+                        const formattedMarketPrice = typeof item.market_price === 'string'
+                            ? item.market_price
+                            : `¥${item.market_price.toLocaleString()}`;
+                        marketPriceDisplay = `
+                            <div style="font-weight: 700;">${formattedMarketPrice}</div>
+                            <div style="margin-top: 4px; display: flex; gap: 8px; font-size: 0.7rem; justify-content: center;">
+                                <a href="https://jp.mercari.com/search?keyword=${encodeURIComponent(cleanTitleForSearch(item.title))}&status=trading_sold" target="_blank" style="color: #00e676; text-decoration: none; font-weight: 600;">Mercari</a>
+                            </div>
+                        `;
+                    }
+                    
+                    let profitDisplay = '-';
+                    let profitClass = '';
+                    
+                    if (item.estimated_profit !== null) {
+                        if (typeof item.estimated_profit === 'string') {
+                            profitDisplay = item.estimated_profit;
+                            profitClass = item.estimated_profit.startsWith('-') ? 'profit-negative' : 'profit-positive';
+                        } else {
+                            const sign = item.estimated_profit >= 0 ? '+' : '';
+                            profitDisplay = `${sign}${item.estimated_profit.toLocaleString()}`;
+                            profitClass = item.estimated_profit >= 0 ? 'profit-positive' : 'profit-negative';
+                        }
+                    }
+
+                    const tr = document.createElement('tr');
+                    tr.innerHTML = `
+                        <td style="color:var(--text-secondary); font-size:0.75rem;">${formatTimeOnly(item.discovered_at)}</td>
+                        <td style="font-weight:600; max-width:240px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="${item.title}">
+                            ${item.title}
+                        </td>
+                        <td style="font-weight:700; color:var(--primary);">¥${item.price.toLocaleString()}</td>
+                        <td style="text-align: center;">${marketPriceDisplay}</td>
+                        <td class="${profitClass}">${profitDisplay}</td>
+                        <td><span class="badge ${badgeClass}">${item.marketplace}</span></td>
+                        <td>
+                            <a href="${item.url}" target="_blank" class="btn btn-sm btn-outline" style="padding:4px 8px;">
+                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+                            </a>
+                        </td>
+                    `;
+                    tbody.appendChild(tr);
+                });
+            } catch (err) {
+                tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--status-red);">Không thể kết nối máy chủ API.</td></tr>';
+                console.error(err);
+            }
+        }
+
+        // Render mini keywords table in Dashboard
+        function renderKeywordsTable() {
+            const tbody = document.querySelector('#keywords-table tbody');
+            tbody.innerHTML = '';
+            
+            const searches = configData.searches || [];
+            if (searches.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--text-secondary);">Chưa cấu hình từ khóa nào.</td></tr>';
+                return;
+            }
+
+            searches.slice(0, 5).forEach((search, idx) => {
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td>${idx+1}</td>
+                    <td style="font-weight:700; color:var(--text-primary);">${search.keyword}</td>
+                    <td style="font-size:0.75rem; color:var(--text-secondary);">Yahoo!, Yahoo!フリマ</td>
+                    <td style="font-weight:600;">¥${search.max_price.toLocaleString()}</td>
+                    <td><span class="badge" style="background-color:var(--status-green); color:#111;">Active</span></td>
+                    <td>
+                        <button class="config-edit-btn" onclick="openAddKeywordModal(${idx})" style="color:var(--primary); display:inline-block; margin-right:8px;">
+                            <svg viewBox="0 0 24 24" width="16" height="16"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7M18.5 2.5a2.121 2.121 0 113 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                        </button>
+                        <button class="config-edit-btn" onclick="deleteSearch(${idx})" style="color:var(--status-red); display:inline-block;">
+                            <svg viewBox="0 0 24 24" width="16" height="16"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+                        </button>
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        // Render detailed Keyword Manager view
+        function renderKeywordsTableDetail() {
+            const tbody = document.querySelector('#view-keywords-table-detail tbody');
+            tbody.innerHTML = '';
+            
+            const searches = configData.searches || [];
+            if (searches.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--text-secondary);">Chưa cấu hình từ khóa nào.</td></tr>';
+                return;
+            }
+
+            searches.forEach((search, idx) => {
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td>${idx+1}</td>
+                    <td style="font-weight:700; color:var(--text-primary);">${search.keyword}</td>
+                    <td>${search.japanese_keyword || '-'}</td>
+                    <td>¥${search.min_price.toLocaleString()}</td>
+                    <td style="font-weight:700; color:var(--primary);">¥${search.max_price.toLocaleString()}</td>
+                    <td style="font-size:0.8rem; color:var(--text-secondary); max-width:150px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="${search.exclude_keywords || ''}">
+                        ${search.exclude_keywords || '-'}
+                    </td>
+                    <td>
+                        <button class="btn btn-sm btn-outline" onclick="openAddKeywordModal(${idx})" style="margin-right:6px;">Sửa</button>
+                        <button class="btn btn-sm btn-danger" onclick="deleteSearch(${idx})">Xóa</button>
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        // Add or Update search parameter
+        async function addSearch() {
+            const keyword = document.getElementById('search-keyword').value.trim();
+            const jpKeyword = document.getElementById('search-jp-keyword').value.trim();
+            const minPrice = parseInt(document.getElementById('search-min-price').value) || 0;
+            const maxPrice = parseInt(document.getElementById('search-max-price').value) || 999999;
+            const excludeKeywords = document.getElementById('search-exclude-keywords').value.trim();
+
+            if (!keyword) {
+                alert("Vui lòng nhập từ khóa tìm kiếm!");
+                return;
+            }
+
+            if (!configData.searches) configData.searches = [];
+            
+            const searchData = {
+                keyword,
+                japanese_keyword: jpKeyword || undefined,
+                min_price: minPrice,
+                max_price: maxPrice,
+                exclude_keywords: excludeKeywords || undefined
+            };
+
+            if (editSearchIdx !== null) {
+                configData.searches[editSearchIdx] = searchData;
+                editSearchIdx = null;
+            } else {
+                configData.searches.push(searchData);
+            }
+
+            await saveConfigToServer();
+            
+            // Reset
+            document.getElementById('search-keyword').value = '';
+            document.getElementById('search-jp-keyword').value = '';
+            document.getElementById('search-exclude-keywords').value = '';
+            
+            closeAddKeywordModal();
+            fetchConfig();
+            if (currentView === 'keywords') {
+                renderKeywordsTableDetail();
+            }
+        }
+
+        // Delete search parameter
+        async function deleteSearch(idx) {
+            if (confirm("Bạn có chắc chắn muốn xóa từ khóa này?")) {
+                configData.searches.splice(idx, 1);
+                await saveConfigToServer();
+                fetchConfig();
+                if (currentView === 'keywords') {
+                    renderKeywordsTableDetail();
+                }
+            }
+        }
+
+        // Populate notification settings fields
+        function populateConfigFields() {
+            document.getElementById('config-line-token').value = configData.notifications?.line?.channel_access_token || '';
+            document.getElementById('config-line-user').value = configData.notifications?.line?.user_id || '';
+            document.getElementById('config-interval').value = configData.check_interval_minutes || 15;
+        }
+
+        // Save entire configuration from UI
+        async function saveConfig() {
+            const lineToken = document.getElementById('config-line-token').value.trim();
+            const lineUser = document.getElementById('config-line-user').value.trim();
+            const interval = parseInt(document.getElementById('config-interval').value) || 15;
+
+            configData.check_interval_minutes = interval;
+            
+            // Keep LINE Notify configuration, remove others
+            configData.notifications = {
+                line: {
+                    channel_access_token: lineToken || "YOUR_LINE_CHANNEL_ACCESS_TOKEN_HERE",
+                    user_id: lineUser || "YOUR_LINE_USER_ID_HERE"
+                }
+            };
+
+            await saveConfigToServer();
+            alert("Đã lưu các cài đặt thành công!");
+            fetchConfig();
+            switchView('products');
+        }
+
+        // POST config.json back to Flask server
+        async function saveConfigToServer() {
+            try {
+                const response = await fetch('/api/config', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(configData)
+                });
+                const data = await response.json();
+                if (data.success) {
+                    configData = data.config;
+                }
+            } catch (err) {
+                console.error("Error saving config:", err);
+            }
+        }
+
+        async function clearDatabase() {
+            if (confirm("Bạn có chắc chắn muốn xóa toàn bộ lịch sử sản phẩm đã lưu trong database?")) {
+                try {
+                    const response = await fetch('/api/clear-database', {
+                        method: 'POST'
+                    });
+                    const data = await response.json();
+                    if (data.success) {
+                        alert("Đã xóa toàn bộ database thành công!");
+                        loadHistory();
+                    } else {
+                        alert("Có lỗi xảy ra: " + (data.error || "Không rõ nguyên nhân"));
+                    }
+                } catch (err) {
+                    alert("Không thể kết nối tới máy chủ: " + err);
+                }
+            }
+        }
+
+        // Load history table with pagination and filter
+        async function loadHistory() {
+            const tbody = document.querySelector('#view-products-table-detail tbody');
+            tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;color:var(--text-secondary);">Đang tải lịch sử săn tin...</td></tr>';
+            
+            const searchVal = encodeURIComponent(document.getElementById('history-search').value.trim());
+            const marketplaceVal = document.getElementById('history-filter-marketplace').value;
+            
+            try {
+                const response = await fetch(`/api/items?limit=100&search=${searchVal}&marketplace=${marketplaceVal}`);
+                const items = await response.json();
+                
+                if (items.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;color:var(--text-secondary);">Không tìm thấy lịch sử phù hợp.</td></tr>';
+                    return;
+                }
+                
+                tbody.innerHTML = '';
+                items.forEach(item => {
+                    let badgeClass = 'badge-yahoo-auctions';
+                    if (item.marketplace === 'Yahoo! Fleamarket') badgeClass = 'badge-yahoo-flea';
+                    
+                    const imageHtml = item.image_url 
+                        ? `<img src="${item.image_url}" style="width:40px; height:40px; object-fit:cover; border-radius:4px;" onerror="this.src='data:image/svg+xml;utf8,<svg viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22currentColor%22 stroke-width=%222%22 xmlns=%22http://www.w3.org/2000/svg%22><rect x=%223%22 y=%223%22 width=%2218%22 height=%2218%22 rx=%222%22/><circle cx=%228.5%22 cy=%228.5%22 r=%221.5%22/><polyline points=%2221 15 16 10 5 21%22/></svg>'">`
+                        : `<div style="width:40px; height:40px; background-color:var(--bg-hover); border-radius:4px; display:flex; align-items:center; justify-content:center; color:var(--text-secondary);"><svg viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" stroke-width="2" fill="none"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg></div>`;
+                    
+                    let marketPriceDisplay = '-';
+                    if (item.market_price) {
+                        const formattedMarketPrice = typeof item.market_price === 'string'
+                            ? item.market_price
+                            : `¥${item.market_price.toLocaleString()}`;
+                        marketPriceDisplay = `
+                            <div style="font-weight: 700;">${formattedMarketPrice}</div>
+                            <div style="margin-top: 4px; display: flex; gap: 8px; font-size: 0.7rem; justify-content: center;">
+                                <a href="https://jp.mercari.com/search?keyword=${encodeURIComponent(cleanTitleForSearch(item.title))}&status=trading_sold" target="_blank" style="color: #00e676; text-decoration: none; font-weight: 600;">Mercari</a>
+                            </div>
+                        `;
+                    }
+                    
+                    let profitDisplay = '-';
+                    let profitClass = '';
+                    
+                    if (item.estimated_profit !== null) {
+                        if (typeof item.estimated_profit === 'string') {
+                            profitDisplay = item.estimated_profit;
+                            profitClass = item.estimated_profit.startsWith('-') ? 'profit-negative' : 'profit-positive';
+                        } else {
+                            const sign = item.estimated_profit >= 0 ? '+' : '';
+                            profitDisplay = `${sign}${item.estimated_profit.toLocaleString()}`;
+                            profitClass = item.estimated_profit >= 0 ? 'profit-positive' : 'profit-negative';
+                        }
+                    }
+
+                    const tr = document.createElement('tr');
+                    tr.innerHTML = `
+                        <td>${imageHtml}</td>
+                        <td><span class="badge ${badgeClass}">${item.marketplace}</span></td>
+                        <td style="font-weight:600; max-width:300px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="${item.title}">${item.title}</td>
+                        <td style="font-weight:700; color:var(--primary);">¥${item.price.toLocaleString()}</td>
+                        <td style="text-align: center;">${marketPriceDisplay}</td>
+                        <td class="${profitClass}">${profitDisplay}</td>
+                        <td style="color:var(--text-secondary); font-size:0.8rem;">${formatFullTime(item.discovered_at)}</td>
+                        <td>
+                            <a href="${item.url}" target="_blank" class="btn btn-sm btn-outline" style="padding:4px 8px;">Link</a>
+                        </td>
+                    `;
+                    tbody.appendChild(tr);
+                });
+            } catch (err) {
+                tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;color:var(--status-red);">Lỗi kết nối lịch sử dữ liệu.</td></tr>';
+                console.error(err);
+            }
+        }
+
+        // Load logs into screen
+        async function loadLogs() {
+            const screen = document.getElementById('terminal-screen');
+            const autoScroll = document.getElementById('auto-scroll').checked;
+            
+            try {
+                const response = await fetch('/api/logs?limit=100');
+                const logs = await response.json();
+                
+                if (logs.length === 0) {
+                    screen.textContent = 'Logs hệ thống sẽ hiển thị ở đây khi bot bắt đầu chạy...';
+                    return;
+                }
+                
+                let processedText = '';
+                logs.forEach(line => {
+                    let escaped = line.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+                    
+                    if (escaped.includes('[ERROR]')) {
+                        escaped = `<span style="color:#ff3d00;">${escaped}</span>`;
+                    } else if (escaped.includes('[WARNING]')) {
+                        escaped = `<span style="color:#ffb300;">${escaped}</span>`;
+                    } else if (escaped.includes('[NEW ITEM]') || escaped.includes('[UI Scraper] [NEW]') || escaped.includes('[NEW]')) {
+                        escaped = `<span style="color:#00e676; font-weight:bold;">${escaped}</span>`;
+                    }
+                    processedText += escaped;
+                });
+                
+                screen.innerHTML = processedText;
+                
+                if (autoScroll) {
+                    screen.scrollTop = screen.scrollHeight;
+                }
+            } catch (err) {
+                screen.textContent = "Lỗi tải console logs: " + err;
+            }
+        }
+
+        // Modal triggers
+        function openAddKeywordModal(idx = null) {
+            editSearchIdx = idx;
+            const titleEl = document.querySelector('#add-keyword-modal .modal-header span');
+            const btnEl = document.querySelector('#add-keyword-modal .modal-footer .btn:not(.btn-outline)');
+            
+            if (idx !== null) {
+                titleEl.textContent = 'Sửa từ khóa theo dõi';
+                btnEl.textContent = 'Lưu thay đổi';
+                
+                const search = configData.searches[idx];
+                document.getElementById('search-keyword').value = search.keyword || '';
+                document.getElementById('search-jp-keyword').value = search.japanese_keyword || '';
+                document.getElementById('search-min-price').value = search.min_price || 0;
+                document.getElementById('search-max-price').value = search.max_price || 999999;
+                document.getElementById('search-exclude-keywords').value = search.exclude_keywords || '';
+            } else {
+                titleEl.textContent = 'Thêm từ khóa theo dõi mới';
+                btnEl.textContent = 'Thêm';
+                
+                document.getElementById('search-keyword').value = '';
+                document.getElementById('search-jp-keyword').value = '';
+                document.getElementById('search-min-price').value = '1000';
+                document.getElementById('search-max-price').value = '50000';
+                document.getElementById('search-exclude-keywords').value = '';
+            }
+            document.getElementById('add-keyword-modal').classList.add('active');
+        }
+
+        function closeAddKeywordModal() {
+            document.getElementById('add-keyword-modal').classList.remove('active');
+        }
+
+        // Title cleaning helper for comparison links
+        function cleanTitleForSearch(title) {
+            if (!title) return "";
+            // Remove trailing ellipsis or dots from truncation
+            let cleaned = title.replace(/\.\.\./g, ' ').replace(/\.\./g, ' ');
+            
+            // Remove text inside brackets
+            cleaned = cleaned.replace(/【[^】]*】/g, ' ');
+            cleaned = cleaned.replace(/\[[^\]]*\]/g, ' ');
+            cleaned = cleaned.replace(/\([^\)]*\)/g, ' ');
+            cleaned = cleaned.replace(/（[^）]*）/g, ' ');
+            
+            // Remove common filler words
+            const fillers = [
+                "新品", "未使用", "美品", "超美品", "ジャンク", "ジャンク品", "訳あり", 
+                "送料無料", "即購入OK", "即購入可", "中古", "動作確認済", "動作品", 
+                "まとめ売り", "本体", "国内発送", "説明欄必読", "動作正常", "動作確認済み"
+            ];
+            fillers.forEach(filler => {
+                cleaned = cleaned.replace(new RegExp(filler, 'g'), ' ');
+            });
+            
+            // Clean up punctuation (keeping hyphens and slashes for model names)
+            cleaned = cleaned.replace(/[\★\☆\◆\◇\■\□\●\○\▲\▼\！\!\？\?\＆\&\＋\+\|]/g, ' ');
+            
+            // Split and limit to 4 words
+            const words = cleaned.trim().split(/\s+/);
+            if (words.length > 4) {
+                return words.slice(0, 4).join(' ');
+            }
+            return words.join(' ');
+        }
+
+        // Time Helpers
+        function formatTimeOnly(dateStr) {
+            const date = new Date(dateStr.replace(' ', 'T'));
+            return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+        }
+
+        function formatFullTime(dateStr) {
+            const date = new Date(dateStr.replace(' ', 'T'));
+            return date.toLocaleString();
+        }
+    </script>
+</body>
+</html>

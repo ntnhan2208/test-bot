@@ -1,0 +1,35 @@
+{
+  "check_interval_minutes": 15,
+  "notifications": {
+    "discord_webhook_url": "YOUR_DISCORD_WEBHOOK_URL_HERE",
+    "line": {
+      "channel_access_token": "YOUR_LINE_CHANNEL_ACCESS_TOKEN_HERE",
+      "user_id": "YOUR_LINE_USER_ID_HERE"
+    },
+    "telegram": {
+      "bot_token": "YOUR_TELEGRAM_BOT_TOKEN_HERE",
+      "chat_id": "YOUR_TELEGRAM_CHAT_ID_HERE"
+    }
+  },
+  "searches": [
+    {
+      "keyword": "macbook",
+      "japanese_keyword": "macbook",
+      "min_price": 5000,
+      "max_price": 50000,
+      "exclude_keywords": "hbroken, parts"
+    },
+    {
+      "japanese_keyword": "iphone",
+      "keyword": "iphone",
+      "max_price": 30000,
+      "min_price": 2000
+    },
+    {
+      "japanese_keyword": "g-shock",
+      "keyword": "g-shock",
+      "max_price": 8000,
+      "min_price": 1000
+    }
+  ]
+}
