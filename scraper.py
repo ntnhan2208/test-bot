@@ -33,16 +33,28 @@ def clean_title_for_search(title):
     fillers = [
         "新品", "未使用", "美品", "超美品", "ジャンク", "ジャンク品", "訳あり", 
         "送料無料", "即購入OK", "即購入可", "中古", "動作確認済", "動作品", 
-        "まとめ売り", "本体", "国内発送", "説明欄必読", "動作正常", "動作確認済み"
+        "まとめ売り", "本体", "国内発送", "説明欄必読", "動作正常", "動作確認済み",
+        "動作OK", "良品"
     ]
     for filler in fillers:
         title = title.replace(filler, " ")
         
     # 3. Clean up punctuation and symbols (keeping hyphens and slashes for model names)
-    title = re.sub(r'[\★\☆\◆\◇\■\□\●\○\▲\▼\！\!\？\?\＆\&\＋\+\|]', ' ', title)
+    title = re.sub(r'[★☆◆◇■□●○▲▼！!？?＆&＋+|♪※]', ' ', title)
+    
+    # 4. Remove seller/warehouse codes (e.g. B26-893, J698225Y, A1708)
+    title = re.sub(r'\b[A-Z]?\d{2,}-\d{2,}\b', ' ', title)  # B26-893 pattern
+    title = re.sub(r'\b[A-Z]\d{5,}\w*\b', ' ', title)  # J698225Y pattern
+    
+    # 5. Remove Apple product codes (e.g. MGND3J/A, MVVK2J/A, MK183J/A)
+    title = re.sub(r'\b[A-Z]{2,}\d+[A-Z]*/[A-Z]\b', ' ', title)
+    
+    # 6. Remove the word "Apple" - rarely used in Mercari JP listings and pollutes search
+    title = re.sub(r'\bApple\b', ' ', title, flags=re.IGNORECASE)
+    
     title = " ".join(title.split())
     
-    # 4. Limit to the first 4 words to keep search queries short and effective
+    # 7. Limit to the first 4 words to keep search queries short and effective
     words = title.split()
     if len(words) > 4:
         title = " ".join(words[:4])
@@ -333,60 +345,67 @@ async def scrape_yahoo_fleamarket(page: Page, keyword: str, min_price: int, max_
 
 async def get_market_price(page: Page, keyword: str):
     """Calculates the average market price of the 15 lowest-priced successfully sold items from Mercari."""
-    prices = []
     
-    # 1. Scrape Mercari for comparison (sold items only)
-    try:
-        keyword_encoded = urllib.parse.quote(keyword)
-        url_mercari = f"https://jp.mercari.com/search?keyword={keyword_encoded}&status=trading_sold&sort_order=created_time"
-        logger.info(f"Querying Mercari for sold market price: {url_mercari}")
-        
-        await page.goto(url_mercari, wait_until="domcontentloaded", timeout=25000)
-        await page.wait_for_timeout(4000)
-        
-        grid_items = await page.locator("li[data-testid='item-cell']").all()
-        if not grid_items:
-            grid_items = await page.locator("mer-item-thumbnail").all()
+    keyword_encoded = urllib.parse.quote(keyword)
+    url_mercari = f"https://jp.mercari.com/search?keyword={keyword_encoded}&status=trading_sold&sort_order=created_time"
+    
+    # Try up to 2 attempts (retry once on failure)
+    for attempt in range(2):
+        prices = []
+        try:
+            logger.info(f"Querying Mercari for sold market price (attempt {attempt+1}): {url_mercari}")
             
-        mercari_prices = []
-        for item in grid_items[:40]:  # sample up to 40 items
-            try:
-                price = None
-                thumbnail_el = item.locator("[id^='m']").first
-                if await thumbnail_el.count() > 0:
-                    label = await thumbnail_el.get_attribute("aria-label")
-                    if label:
-                        jpy_match = re.search(r"([\d,]+)円", label)
-                        if jpy_match:
-                            price = clean_price(jpy_match.group(1))
+            await page.goto(url_mercari, wait_until="domcontentloaded", timeout=25000)
+            await page.wait_for_timeout(4000)
+            
+            grid_items = await page.locator("li[data-testid='item-cell']").all()
+            if not grid_items:
+                grid_items = await page.locator("mer-item-thumbnail").all()
                 
-                if price is None or price == 0:
-                    price_el = item.locator("[class*='price']").first
-                    if await price_el.count() > 0:
-                        price_text = await price_el.inner_text()
-                        if any(marker in price_text for marker in ["VND", "₫", "đ"]):
-                            continue
-                        price = clean_price(price_text)
+            for item in grid_items[:40]:  # sample up to 40 items
+                try:
+                    price = None
+                    thumbnail_el = item.locator("[id^='m']").first
+                    if await thumbnail_el.count() > 0:
+                        label = await thumbnail_el.get_attribute("aria-label")
+                        if label:
+                            jpy_match = re.search(r"([\d,]+)円", label)
+                            if jpy_match:
+                                price = clean_price(jpy_match.group(1))
                     
-                if price and price > 0:
-                    mercari_prices.append(price)
-            except Exception:
-                continue
+                    if price is None or price == 0:
+                        price_el = item.locator("[class*='price']").first
+                        if await price_el.count() > 0:
+                            price_text = await price_el.inner_text()
+                            if any(marker in price_text for marker in ["VND", "₫", "đ"]):
+                                continue
+                            price = clean_price(price_text)
+                        
+                    if price and price > 0:
+                        prices.append(price)
+                except Exception:
+                    continue
+                    
+            logger.info(f"Mercari comparison: extracted {len(prices)} JPY prices (attempt {attempt+1}).")
+            
+            if prices:
+                # Sort ascending (cheapest first)
+                sorted_prices = sorted(prices)
+                lowest_15 = sorted_prices[:15]
+                avg_price = int(sum(lowest_15) / len(lowest_15))
+                logger.info(f"Calculated average of 15 lowest JPY prices for '{keyword}': JPY {avg_price:,} (from sample size of {len(prices)})")
+                return avg_price
+            
+            # If no prices found on first attempt, wait and retry
+            if attempt == 0:
+                logger.info(f"No prices found for '{keyword}', retrying in 3 seconds...")
+                await page.wait_for_timeout(3000)
                 
-        logger.info(f"Mercari comparison: extracted {len(mercari_prices)} JPY prices.")
-        prices.extend(mercari_prices)
-    except Exception as e:
-        logger.warning(f"Failed to scrape Mercari for market price: {e}")
-
-    # Calculate average of the 15 lowest priced items
-    if prices:
-        # Sort ascending (cheapest first)
-        sorted_prices = sorted(prices)
-        lowest_15 = sorted_prices[:15]
-        avg_price = int(sum(lowest_15) / len(lowest_15))
-        logger.info(f"Calculated average of 15 lowest JPY prices for '{keyword}': JPY {avg_price:,} (from sample size of {len(prices)})")
-        return avg_price
+        except Exception as e:
+            logger.warning(f"Failed to scrape Mercari for market price (attempt {attempt+1}): {e}")
+            if attempt == 0:
+                await page.wait_for_timeout(3000)
         
-    logger.warning(f"Could not extract any prices for '{keyword}' market calculation.")
+    logger.warning(f"Could not extract any prices for '{keyword}' market calculation after 2 attempts.")
     return 0
 

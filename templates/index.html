@@ -1865,14 +1865,25 @@
             const fillers = [
                 "新品", "未使用", "美品", "超美品", "ジャンク", "ジャンク品", "訳あり", 
                 "送料無料", "即購入OK", "即購入可", "中古", "動作確認済", "動作品", 
-                "まとめ売り", "本体", "国内発送", "説明欄必読", "動作正常", "動作確認済み"
+                "まとめ売り", "本体", "国内発送", "説明欄必読", "動作正常", "動作確認済み",
+                "動作OK", "良品"
             ];
             fillers.forEach(filler => {
                 cleaned = cleaned.replace(new RegExp(filler, 'g'), ' ');
             });
             
             // Clean up punctuation (keeping hyphens and slashes for model names)
-            cleaned = cleaned.replace(/[\★\☆\◆\◇\■\□\●\○\▲\▼\！\!\？\?\＆\&\＋\+\|]/g, ' ');
+            cleaned = cleaned.replace(/[★☆◆◇■□●○▲▼！!？?＆&＋+|♪※]/g, ' ');
+            
+            // Remove seller/warehouse codes (e.g. B26-893, J698225Y)
+            cleaned = cleaned.replace(/\b[A-Z]?\d{2,}-\d{2,}\b/g, ' ');
+            cleaned = cleaned.replace(/\b[A-Z]\d{5,}\w*\b/g, ' ');
+            
+            // Remove Apple product codes (e.g. MGND3J/A, MVVK2J/A)
+            cleaned = cleaned.replace(/\b[A-Z]{2,}\d+[A-Z]*\/[A-Z]\b/g, ' ');
+            
+            // Remove "Apple" - rarely used in Mercari JP
+            cleaned = cleaned.replace(/\bApple\b/gi, ' ');
             
             // Split and limit to 4 words
             const words = cleaned.trim().split(/\s+/);
