@@ -144,7 +144,17 @@ async def main():
     # 4. Start Playwright and run loop
     async with async_playwright() as p:
         logger.info("Launching headless browser...")
-        browser = await p.chromium.launch(headless=True)
+        browser = await p.chromium.launch(
+            headless=True,
+            args=[
+                "--disable-dev-shm-usage",
+                "--no-sandbox",
+                "--disable-setuid-sandbox",
+                "--disable-gpu",
+                "--no-first-run",
+                "--no-zygote"
+            ]
+        )
         # Create a realistic context with custom user agent and locale
         context = await browser.new_context(
             user_agent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",

@@ -71,7 +71,17 @@ class ScraperRunner:
         
         async with async_playwright() as p:
             logger.info("WebUI Bot: Launching headless browser...")
-            browser = await p.chromium.launch(headless=True)
+            browser = await p.chromium.launch(
+                headless=True,
+                args=[
+                    "--disable-dev-shm-usage",
+                    "--no-sandbox",
+                    "--disable-setuid-sandbox",
+                    "--disable-gpu",
+                    "--no-first-run",
+                    "--no-zygote"
+                ]
+            )
             
             while not self.stop_event.is_set():
                 context = None
