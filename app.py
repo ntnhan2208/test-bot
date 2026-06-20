@@ -37,7 +37,14 @@ class ScraperRunner:
         
     def start(self):
         if self.thread and self.thread.is_alive():
-            return False
+            if self.stop_event.is_set():
+                logger.info("Bot is in the process of stopping. Waiting for old thread to exit...")
+                self.thread.join(timeout=5.0)
+                if self.thread.is_alive():
+                    logger.warning("Old thread did not exit within timeout. Cannot start new one.")
+                    return False
+            else:
+                return False
         self.stop_event.clear()
         self.thread = threading.Thread(target=self._run_loop)
         self.thread.daemon = True
@@ -199,12 +206,12 @@ class ScraperRunner:
                     # Securely close context and page to release memory
                     if page:
                         try:
-                            await page.close()
+                            await asyncio.wait_for(page.close(), timeout=3.0)
                         except Exception:
                             pass
                     if context:
                         try:
-                            await context.close()
+                            await asyncio.wait_for(context.close(), timeout=3.0)
                         except Exception:
                             pass
                 
@@ -222,7 +229,10 @@ class ScraperRunner:
                     await asyncio.sleep(1)
             
             logger.info("Closing browser...")
-            await browser.close()
+            try:
+                await asyncio.wait_for(browser.close(), timeout=5.0)
+            except Exception:
+                pass
             
         logger.info("Background scraper thread finished.")
 
