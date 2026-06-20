@@ -94,27 +94,49 @@ class ScraperRunner:
                 ]
             )
             
-            while not self.stop_event.is_set():
-                context = None
-                page = None
+            context_options = {
+                "user_agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+                "viewport": {"width": 1280, "height": 800},
+                "locale": "ja-JP",
+                "timezone_id": "Asia/Tokyo",
+                "extra_http_headers": {"Accept-Language": "ja-JP,ja;q=0.9"}
+            }
+            
+            async def block_resources(route):
+                if route.request.resource_type in ["image", "stylesheet", "font", "media"]:
+                    await route.abort()
+                else:
+                    await route.continue_()
+            
+            async def create_page():
+                ctx = await browser.new_context(**context_options)
+                pg = await ctx.new_page()
+                await pg.route("**/*", block_resources)
+                return ctx, pg
+            
+            async def safe_market_price(cleaned_title):
+                """Fetch market price in an isolated context so crashes don't affect the main page."""
+                mctx = None
                 try:
-                    # Create a clean context and page for this scan cycle to avoid page memory leaks
-                    context = await browser.new_context(
-                        user_agent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-                        viewport={"width": 1280, "height": 800},
-                        locale="ja-JP",
-                        timezone_id="Asia/Tokyo",
-                        extra_http_headers={"Accept-Language": "ja-JP,ja;q=0.9"}
-                    )
-                    page = await context.new_page()
-                    
-                    # Block images, CSS, fonts and media to save RAM on Railway
-                    async def block_resources(route):
-                        if route.request.resource_type in ["image", "stylesheet", "font", "media"]:
-                            await route.abort()
-                        else:
-                            await route.continue_()
-                    await page.route("**/*", block_resources)
+                    mctx, mpage = await create_page()
+                    result = await scraper.get_market_price(mpage, cleaned_title)
+                    return result
+                except Exception as e:
+                    logger.warning(f"Market price lookup failed for '{cleaned_title}': {e}")
+                    return 0
+                finally:
+                    if mctx:
+                        try:
+                            await asyncio.wait_for(mctx.close(), timeout=3.0)
+                        except Exception:
+                            pass
+            
+            while not self.stop_event.is_set():
+                scrape_context = None
+                scrape_page = None
+                try:
+                    # Create a fresh context+page for scraping Yahoo/PayPay
+                    scrape_context, scrape_page = await create_page()
                     
                     self.status = "Scanning"
                     self.last_run_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -144,7 +166,7 @@ class ScraperRunner:
                         logger.info(f"[UI Scraper] Scanning: '{search_query}' (Price: {min_price} - {max_price} JPY)")
                         
                         # 1. Yahoo Auctions
-                        yahoo_items = await scraper.scrape_yahoo_auctions(page, search_query, min_price, max_price)
+                        yahoo_items = await scraper.scrape_yahoo_auctions(scrape_page, search_query, min_price, max_price)
                         # Polite interruptible sleeps
                         for _ in range(random.randint(3, 7)):
                             if self.stop_event.is_set():
@@ -155,7 +177,7 @@ class ScraperRunner:
                             break
                             
                         # 2. Yahoo! Fleamarket
-                        fleamarket_items = await scraper.scrape_yahoo_fleamarket(page, search_query, min_price, max_price)
+                        fleamarket_items = await scraper.scrape_yahoo_fleamarket(scrape_page, search_query, min_price, max_price)
                         
                         all_found = yahoo_items + fleamarket_items
                         
@@ -182,10 +204,10 @@ class ScraperRunner:
                             
                             seen = database.is_item_seen(marketplace, item_id)
                             if not seen:
-                                # Clean title and fetch market price specifically for this item
+                                # Fetch market price in an ISOLATED context (crash-safe)
                                 cleaned_title = scraper.clean_title_for_search(title)
                                 logger.info(f"[UI Scraper] Fetching market price for new item '{title}' (query: '{cleaned_title}')")
-                                item_market_price = await scraper.get_market_price(page, cleaned_title)
+                                item_market_price = await safe_market_price(cleaned_title)
                                 item["market_price"] = item_market_price if item_market_price > 0 else None
                                 item["estimated_profit"] = (item_market_price - price) if item_market_price > 0 else None
                                 
@@ -215,15 +237,10 @@ class ScraperRunner:
                 except Exception as cycle_err:
                     logger.error(f"Error during scan cycle: {cycle_err}")
                 finally:
-                    # Securely close context and page to release memory
-                    if page:
+                    # Close scraping context to release memory
+                    if scrape_context:
                         try:
-                            await asyncio.wait_for(page.close(), timeout=3.0)
-                        except Exception:
-                            pass
-                    if context:
-                        try:
-                            await asyncio.wait_for(context.close(), timeout=3.0)
+                            await asyncio.wait_for(scrape_context.close(), timeout=3.0)
                         except Exception:
                             pass
                 
