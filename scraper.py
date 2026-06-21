@@ -365,6 +365,17 @@ async def get_market_price(page: Page, keyword: str):
             
         for item in grid_items[:10]:  # sample up to 10 items (reduced from 40)
             try:
+                # Link/URL
+                link_el = item.locator("a").first
+                href = await link_el.get_attribute("href") if await link_el.count() > 0 else ""
+                full_url = urllib.parse.urljoin("https://jp.mercari.com", href) if href else ""
+
+                # Title
+                img_el = item.locator("img").first
+                title_alt = await img_el.get_attribute("alt") if await img_el.count() > 0 else ""
+                title = title_alt.replace("のサムネイル", "").strip() if title_alt else "Mercari Item"
+
+                # Price
                 price = None
                 thumbnail_el = item.locator("[id^='m']").first
                 if await thumbnail_el.count() > 0:
@@ -383,17 +394,26 @@ async def get_market_price(page: Page, keyword: str):
                         price = clean_price(price_text)
                     
                 if price and price > 0:
-                    prices.append(price)
+                    prices.append({
+                        "title": title,
+                        "price": price,
+                        "url": full_url
+                    })
             except Exception:
                 continue
                 
         logger.info(f"Mercari comparison: extracted {len(prices)} JPY prices.")
         
         if prices:
-            sorted_prices = sorted(prices)
-            lowest_5 = sorted_prices[:5]
-            avg_price = int(sum(lowest_5) / len(lowest_5))
+            sorted_items = sorted(prices, key=lambda x: x["price"])
+            lowest_5 = sorted_items[:5]
+            avg_price = int(sum(x["price"] for x in lowest_5) / len(lowest_5))
+            
             logger.info(f"Calculated average of {len(lowest_5)} lowest JPY prices for '{keyword}': JPY {avg_price:,}")
+            logger.info(f"--- Items used for average calculation of '{keyword}': ---")
+            for idx, item_detail in enumerate(lowest_5):
+                logger.info(f"  {idx+1}. {item_detail['title']} - ¥{item_detail['price']:,} - {item_detail['url']}")
+            logger.info("-------------------------------------------------------------")
             return avg_price
             
     except Exception as e:
