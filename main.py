@@ -43,7 +43,6 @@ BROWSER_ARGS = [
     "--disable-gpu",
     "--no-first-run",
     "--no-zygote",
-    "--single-process",
     "--disable-extensions",
     "--disable-component-extensions",
     "--disable-background-networking",
@@ -59,7 +58,7 @@ BROWSER_ARGS = [
     "--disable-component-update",
     "--disable-domain-reliability",
     "--disable-features=AudioServiceOutOfProcess,IsolateOrigins,site-per-process",
-    "--js-flags=--max-old-space-size=64"
+    "--js-flags=--max-old-space-size=128"
 ]
 
 CONTEXT_OPTIONS = {
@@ -105,9 +104,6 @@ async def run_search_cycle(config, browser, dry_run=False):
     max_items = config.get("max_items_per_page", 10)
     skip_market = config.get("skip_market_price", False)
     
-    # Create a fresh context+page for scraping Yahoo/PayPay each cycle
-    scrape_context, scrape_page = await create_page(browser)
-    
     try:
         for idx, search_item in enumerate(searches):
             keyword = search_item.get("keyword")
@@ -119,11 +115,26 @@ async def run_search_cycle(config, browser, dry_run=False):
             logger.info(f"Processing search {idx+1}/{len(searches)}: '{search_query}' (Price: {min_price} - {max_price} JPY, max items: {max_items})")
             
             # 1. Scrape Yahoo Auctions
-            yahoo_items = await scraper.scrape_yahoo_auctions(scrape_page, search_query, min_price, max_price, max_items)
+            yahoo_items = []
+            scrape_context, scrape_page = await create_page(browser)
+            try:
+                yahoo_items = await scraper.scrape_yahoo_auctions(scrape_page, search_query, min_price, max_price, max_items)
+            except Exception as e:
+                logger.error(f"Error scraping Yahoo Auctions: {e}")
+            finally:
+                await scrape_context.close()
+                
             await asyncio.sleep(random.uniform(3, 7)) # polite delay
             
             # 2. Scrape Yahoo! Fleamarket
-            fleamarket_items = await scraper.scrape_yahoo_fleamarket(scrape_page, search_query, min_price, max_price, max_items)
+            fleamarket_items = []
+            scrape_context, scrape_page = await create_page(browser)
+            try:
+                fleamarket_items = await scraper.scrape_yahoo_fleamarket(scrape_page, search_query, min_price, max_price, max_items)
+            except Exception as e:
+                logger.error(f"Error scraping Yahoo! Fleamarket: {e}")
+            finally:
+                await scrape_context.close()
             
             all_found = yahoo_items + fleamarket_items
             logger.info(f"Cycle completed for '{search_query}'. Found {len(all_found)} total items across all marketplaces.")
@@ -154,10 +165,16 @@ async def run_search_cycle(config, browser, dry_run=False):
                 if not seen:
                     item_market_price = 0
                     if not skip_market:
-                        # Reuse scrape_page for market price to save memory (no separate context)
                         cleaned_title = scraper.clean_title_for_search(title)
                         logger.info(f"Fetching market price for new item '{title}' (query: '{cleaned_title}')")
-                        item_market_price = await safe_get_market_price(scrape_page, cleaned_title)
+                        
+                        m_context, m_page = await create_page(browser)
+                        try:
+                            item_market_price = await scraper.get_market_price(m_page, cleaned_title)
+                        except Exception as m_err:
+                            logger.warning(f"Market price lookup failed for '{cleaned_title}': {m_err}")
+                        finally:
+                            await m_context.close()
                     else:
                         logger.info(f"Skipping market price lookup (disabled in config)")
                     
@@ -188,11 +205,6 @@ async def run_search_cycle(config, browser, dry_run=False):
             if idx < len(searches) - 1:
                 await asyncio.sleep(random.uniform(5, 10))
     finally:
-        # Always close the scraping context at the end of the cycle
-        try:
-            await scrape_context.close()
-        except Exception:
-            pass
         # Force garbage collection after each cycle
         gc.collect()
 
@@ -220,29 +232,34 @@ async def main():
     interval_minutes = config.get("check_interval_minutes", 15)
     
     # 4. Start Playwright and run loop
-    async with async_playwright() as p:
-        logger.info("Launching headless browser...")
-        browser = await p.chromium.launch(
-            headless=True,
-            args=BROWSER_ARGS
-        )
-        
-        try:
-            if args.once:
+    try:
+        if args.once:
+            async with async_playwright() as p:
+                logger.info("Launching headless browser...")
+                browser = await p.chromium.launch(
+                    headless=True,
+                    args=BROWSER_ARGS
+                )
                 await run_search_cycle(config, browser, args.dry_run)
-            else:
-                while True:
+                await browser.close()
+        else:
+            while True:
+                async with async_playwright() as p:
+                    logger.info("Launching headless browser...")
+                    browser = await p.chromium.launch(
+                        headless=True,
+                        args=BROWSER_ARGS
+                    )
                     await run_search_cycle(config, browser, args.dry_run)
-                    logger.info(f"Sleeping for {interval_minutes} minutes before next check...")
-                    await asyncio.sleep(interval_minutes * 60)
-        except KeyboardInterrupt:
-            logger.info("Bot manually stopped by KeyboardInterrupt.")
-        except Exception as e:
-            logger.exception(f"Unexpected error in main loop: {e}")
-        finally:
-            logger.info("Closing browser...")
-            await browser.close()
-            logger.info("Bot execution finished.")
+                    await browser.close()
+                logger.info(f"Sleeping for {interval_minutes} minutes before next check...")
+                await asyncio.sleep(interval_minutes * 60)
+    except KeyboardInterrupt:
+        logger.info("Bot manually stopped by KeyboardInterrupt.")
+    except Exception as e:
+        logger.exception(f"Unexpected error in main loop: {e}")
+    finally:
+        logger.info("Bot execution finished.")
 
 if __name__ == "__main__":
     try:

@@ -77,208 +77,240 @@ class ScraperRunner:
         logger.info("Background scraper thread started.")
         database.init_db()
         
-        async with async_playwright() as p:
-            logger.info("WebUI Bot: Launching headless browser...")
-            browser = await p.chromium.launch(
-                headless=True,
-                args=[
-                    "--disable-dev-shm-usage",
-                    "--no-sandbox",
-                    "--disable-setuid-sandbox",
-                    "--disable-gpu",
-                    "--no-first-run",
-                    "--no-zygote",
-                    "--single-process",
-                    "--disable-extensions",
-                    "--disable-component-extensions",
-                    "--disable-background-networking",
-                    "--disable-default-apps",
-                    "--disable-sync",
-                    "--disable-translate",
-                    "--metrics-recording-only",
-                    "--mute-audio",
-                    "--no-default-browser-check",
-                    "--disable-hang-monitor",
-                    "--disable-prompt-on-repost",
-                    "--disable-client-side-phishing-detection",
-                    "--disable-component-update",
-                    "--disable-domain-reliability",
-                    "--disable-features=AudioServiceOutOfProcess,IsolateOrigins,site-per-process",
-                    "--js-flags=--max-old-space-size=64",
-                ]
-            )
-            
-            context_options = {
-                "user_agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-                "viewport": {"width": 800, "height": 600},
-                "locale": "ja-JP",
-                "timezone_id": "Asia/Tokyo",
-                "extra_http_headers": {"Accept-Language": "ja-JP,ja;q=0.9"}
-            }
-            
-            async def block_resources(route):
-                if route.request.resource_type in ["image", "stylesheet", "font", "media"]:
-                    await route.abort()
-                else:
-                    await route.continue_()
-            
-            async def create_page():
-                ctx = await browser.new_context(**context_options)
-                pg = await ctx.new_page()
-                await pg.route("**/*", block_resources)
-                return ctx, pg
-            
-            async def safe_market_price(page, cleaned_title):
-                """Fetch market price reusing the same page to save memory."""
-                try:
-                    result = await scraper.get_market_price(page, cleaned_title)
-                    return result
-                except Exception as e:
-                    logger.warning(f"Market price lookup failed for '{cleaned_title}': {e}")
-                    return 0
-            
-            while not self.stop_event.is_set():
-                scrape_context = None
-                scrape_page = None
-                try:
-                    # Create a fresh context+page for scraping Yahoo/PayPay
-                    scrape_context, scrape_page = await create_page()
-                    
-                    self.status = "Scanning"
-                    self.last_run_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                    
-                    # Reload config every run cycle to capture UI updates
-                    try:
-                        with open(CONFIG_PATH, "r", encoding="utf-8") as f:
-                            config = json.load(f)
-                    except Exception as e:
-                        logger.error(f"Failed to reload config: {e}")
-                        self.status = "Running"
-                        await asyncio.sleep(10)
-                        continue
-
-                    searches = config.get("searches", [])
-                    interval_minutes = config.get("check_interval_minutes", 15)
-                    max_items = config.get("max_items_per_page", 10)
-                    skip_market = config.get("skip_market_price", False)
-                    
-                    for idx, search_item in enumerate(searches):
-                        if self.stop_event.is_set():
-                            break
-                            
-                        keyword = search_item.get("keyword")
-                        search_query = search_item.get("japanese_keyword") or keyword
-                        min_price = search_item.get("min_price", 0)
-                        max_price = search_item.get("max_price", 999999)
-                        
-                        logger.info(f"[UI Scraper] Scanning: '{search_query}' (Price: {min_price} - {max_price} JPY, max items: {max_items})")
-                        
-                        # 1. Yahoo Auctions
-                        yahoo_items = await scraper.scrape_yahoo_auctions(scrape_page, search_query, min_price, max_price, max_items)
-                        # Polite interruptible sleeps
-                        for _ in range(random.randint(3, 7)):
-                            if self.stop_event.is_set():
-                                break
-                            await asyncio.sleep(1)
-                        
-                        if self.stop_event.is_set():
-                            break
-                            
-                        # 2. Yahoo! Fleamarket
-                        fleamarket_items = await scraper.scrape_yahoo_fleamarket(scrape_page, search_query, min_price, max_price, max_items)
-                        
-                        all_found = yahoo_items + fleamarket_items
-                        
-                        # Parse excluded keywords for this search
-                        exclude_str = search_item.get("exclude_keywords", "")
-                        excludes = [k.strip().lower() for k in exclude_str.split(",") if k.strip()] if exclude_str else []
-                        
-                        new_items_count = 0
-                        for item in all_found:
-                            if self.stop_event.is_set():
-                                break
-                            marketplace = item["marketplace"]
-                            item_id = item["item_id"]
-                            title = item["title"]
-                            price = item["price"]
-                            url = item["url"]
-                            
-                            # Excluded keyword check (case-insensitive)
-                            if excludes:
-                                title_lower = title.lower()
-                                if any(ex in title_lower for ex in excludes):
-                                    logger.info(f"[UI Scraper] Skipping '{title}' as it contains an excluded keyword.")
-                                    continue
-                            
-                            seen = database.is_item_seen(marketplace, item_id)
-                            if not seen:
-                                item_market_price = 0
-                                if not skip_market:
-                                    # Reuse scrape_page for market price to save memory
-                                    cleaned_title = scraper.clean_title_for_search(title)
-                                    logger.info(f"[UI Scraper] Fetching market price for new item '{title}' (query: '{cleaned_title}')")
-                                    item_market_price = await safe_market_price(scrape_page, cleaned_title)
-                                    # Navigate back after market price lookup to reset page state
-                                else:
-                                    logger.info(f"[UI Scraper] Skipping market price lookup (disabled in config)")
-                                    
-                                item["market_price"] = item_market_price if item_market_price > 0 else None
-                                item["estimated_profit"] = (item_market_price - price) if item_market_price > 0 else None
-                                
-                                new_items_count += 1
-                                profit_str = f" (Profit: ¥{item['estimated_profit']:,})" if item["estimated_profit"] is not None else ""
-                                logger.info(f"[UI Scraper] [NEW] [{marketplace}] {title} - ¥{price:,}{profit_str}")
-                                notifier.notify_all(config, item)
-                                database.mark_item_as_seen(marketplace, item_id, title, price, url, item["market_price"], item["estimated_profit"])
-                                
-                                # Polite delay after querying comparison site
-                                for _ in range(random.randint(2, 4)):
-                                    if self.stop_event.is_set():
-                                        break
-                                    await asyncio.sleep(1)
-                            else:
-                                item["market_price"] = None
-                                item["estimated_profit"] = None
-                                
-                        logger.info(f"[UI Scraper] Finished '{search_query}'. Discovered {new_items_count} new items.")
-                        
-                        # Wait between search keywords
-                        if idx < len(searches) - 1:
-                            for _ in range(random.randint(5, 10)):
-                                if self.stop_event.is_set():
-                                    break
-                                await asyncio.sleep(1)
-                except Exception as cycle_err:
-                    logger.error(f"Error during scan cycle: {cycle_err}")
-                finally:
-                    # Close scraping context to release memory
-                    if scrape_context:
-                        try:
-                            await asyncio.wait_for(scrape_context.close(), timeout=3.0)
-                        except Exception:
-                            pass
-                    # Force garbage collection after each cycle
-                    gc.collect()
-                
-                if self.stop_event.is_set():
-                    break
-                    
+        while not self.stop_event.is_set():
+            # Reload config every run cycle to capture UI updates
+            try:
+                with open(CONFIG_PATH, "r", encoding="utf-8") as f:
+                    config = json.load(f)
+            except Exception as e:
+                logger.error(f"Failed to reload config: {e}")
                 self.status = "Running"
-                logger.info(f"Cycle finished. Next run in {interval_minutes} minutes. Memory freed via gc.")
-                
-                # Sleep between run cycles in small 1-sec chunks so we can interrupt immediately
-                seconds_to_sleep = interval_minutes * 60
-                for _ in range(int(seconds_to_sleep)):
+                await asyncio.sleep(10)
+                continue
+
+            searches = config.get("searches", [])
+            interval_minutes = config.get("check_interval_minutes", 15)
+            max_items = config.get("max_items_per_page", 10)
+            skip_market = config.get("skip_market_price", False)
+            
+            if not searches:
+                self.status = "Running"
+                logger.info("No searches configured in config.json. Sleeping...")
+                for _ in range(30):
                     if self.stop_event.is_set():
                         break
                     await asyncio.sleep(1)
+                continue
+
+            self.status = "Scanning"
+            self.last_run_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             
-            logger.info("Closing browser...")
+            p = None
+            browser = None
             try:
-                await asyncio.wait_for(browser.close(), timeout=5.0)
-            except Exception:
-                pass
+                p = await async_playwright().start()
+                logger.info("WebUI Bot: Launching fresh headless browser for scan cycle...")
+                browser = await p.chromium.launch(
+                    headless=True,
+                    args=[
+                        "--disable-dev-shm-usage",
+                        "--no-sandbox",
+                        "--disable-setuid-sandbox",
+                        "--disable-gpu",
+                        "--no-first-run",
+                        "--no-zygote",
+                        "--disable-extensions",
+                        "--disable-component-extensions",
+                        "--disable-background-networking",
+                        "--disable-default-apps",
+                        "--disable-sync",
+                        "--disable-translate",
+                        "--metrics-recording-only",
+                        "--mute-audio",
+                        "--no-default-browser-check",
+                        "--disable-hang-monitor",
+                        "--disable-prompt-on-repost",
+                        "--disable-client-side-phishing-detection",
+                        "--disable-component-update",
+                        "--disable-domain-reliability",
+                        "--disable-features=AudioServiceOutOfProcess,IsolateOrigins,site-per-process",
+                        "--js-flags=--max-old-space-size=128",
+                    ]
+                )
+                
+                context_options = {
+                    "user_agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+                    "viewport": {"width": 800, "height": 600},
+                    "locale": "ja-JP",
+                    "timezone_id": "Asia/Tokyo",
+                    "extra_http_headers": {"Accept-Language": "ja-JP,ja;q=0.9"}
+                }
+                
+                async def block_resources(route):
+                    if route.request.resource_type in ["image", "stylesheet", "font", "media"]:
+                        await route.abort()
+                    else:
+                        await route.continue_()
+                
+                async def create_page():
+                    ctx = await browser.new_context(**context_options)
+                    pg = await ctx.new_page()
+                    await pg.route("**/*", block_resources)
+                    return ctx, pg
+                
+                for idx, search_item in enumerate(searches):
+                    if self.stop_event.is_set():
+                        break
+                        
+                    keyword = search_item.get("keyword")
+                    search_query = search_item.get("japanese_keyword") or keyword
+                    min_price = search_item.get("min_price", 0)
+                    max_price = search_item.get("max_price", 999999)
+                    
+                    logger.info(f"[UI Scraper] Scanning: '{search_query}' (Price: {min_price} - {max_price} JPY, max items: {max_items})")
+                    
+                    # 1. Yahoo Auctions
+                    yahoo_items = []
+                    scrape_context = None
+                    scrape_page = None
+                    try:
+                        scrape_context, scrape_page = await create_page()
+                        yahoo_items = await scraper.scrape_yahoo_auctions(scrape_page, search_query, min_price, max_price, max_items)
+                    except Exception as scrape_err:
+                        logger.error(f"Error scraping Yahoo Auctions for '{search_query}': {scrape_err}")
+                    finally:
+                        if scrape_context:
+                            try:
+                                await scrape_context.close()
+                            except Exception:
+                                pass
+                                
+                    # Polite interruptible sleeps
+                    for _ in range(random.randint(3, 7)):
+                        if self.stop_event.is_set():
+                            break
+                        await asyncio.sleep(1)
+                    
+                    if self.stop_event.is_set():
+                        break
+                        
+                    # 2. Yahoo! Fleamarket
+                    fleamarket_items = []
+                    scrape_context = None
+                    scrape_page = None
+                    try:
+                        scrape_context, scrape_page = await create_page()
+                        fleamarket_items = await scraper.scrape_yahoo_fleamarket(scrape_page, search_query, min_price, max_price, max_items)
+                    except Exception as scrape_err:
+                        logger.error(f"Error scraping Yahoo! Fleamarket for '{search_query}': {scrape_err}")
+                    finally:
+                        if scrape_context:
+                            try:
+                                await scrape_context.close()
+                            except Exception:
+                                pass
+                    
+                    all_found = yahoo_items + fleamarket_items
+                    
+                    # Parse excluded keywords for this search
+                    exclude_str = search_item.get("exclude_keywords", "")
+                    excludes = [k.strip().lower() for k in exclude_str.split(",") if k.strip()] if exclude_str else []
+                    
+                    new_items_count = 0
+                    for item in all_found:
+                        if self.stop_event.is_set():
+                            break
+                        marketplace = item["marketplace"]
+                        item_id = item["item_id"]
+                        title = item["title"]
+                        price = item["price"]
+                        url = item["url"]
+                        
+                        # Excluded keyword check (case-insensitive)
+                        if excludes:
+                            title_lower = title.lower()
+                            if any(ex in title_lower for ex in excludes):
+                                logger.info(f"[UI Scraper] Skipping '{title}' as it contains an excluded keyword.")
+                                continue
+                        
+                        seen = database.is_item_seen(marketplace, item_id)
+                        if not seen:
+                            item_market_price = 0
+                            if not skip_market:
+                                cleaned_title = scraper.clean_title_for_search(title)
+                                logger.info(f"[UI Scraper] Fetching market price for new item '{title}' (query: '{cleaned_title}')")
+                                
+                                m_context = None
+                                m_page = None
+                                try:
+                                    m_context, m_page = await create_page()
+                                    item_market_price = await scraper.get_market_price(m_page, cleaned_title)
+                                except Exception as m_err:
+                                    logger.warning(f"Market price lookup failed for '{cleaned_title}': {m_err}")
+                                finally:
+                                    if m_context:
+                                        try:
+                                            await m_context.close()
+                                        except Exception:
+                                            pass
+                            else:
+                                logger.info(f"[UI Scraper] Skipping market price lookup (disabled in config)")
+                                
+                            item["market_price"] = item_market_price if item_market_price > 0 else None
+                            item["estimated_profit"] = (item_market_price - price) if item_market_price > 0 else None
+                            
+                            new_items_count += 1
+                            profit_str = f" (Profit: ¥{item['estimated_profit']:,})" if item["estimated_profit"] is not None else ""
+                            logger.info(f"[UI Scraper] [NEW] [{marketplace}] {title} - ¥{price:,}{profit_str}")
+                            notifier.notify_all(config, item)
+                            database.mark_item_as_seen(marketplace, item_id, title, price, url, item["market_price"], item["estimated_profit"])
+                            
+                            # Polite delay after querying comparison site
+                            for _ in range(random.randint(2, 4)):
+                                if self.stop_event.is_set():
+                                    break
+                                await asyncio.sleep(1)
+                        else:
+                            item["market_price"] = None
+                            item["estimated_profit"] = None
+                            
+                    logger.info(f"[UI Scraper] Finished '{search_query}'. Discovered {new_items_count} new items.")
+                    
+                    # Wait between search keywords
+                    if idx < len(searches) - 1:
+                        for _ in range(random.randint(5, 10)):
+                            if self.stop_event.is_set():
+                                break
+                            await asyncio.sleep(1)
+            except Exception as cycle_err:
+                logger.error(f"Error during scan cycle: {cycle_err}")
+            finally:
+                if browser:
+                    try:
+                        await browser.close()
+                    except Exception:
+                        pass
+                if p:
+                    try:
+                        await p.stop()
+                    except Exception:
+                        pass
+                # Force garbage collection after each cycle
+                gc.collect()
             
+            if self.stop_event.is_set():
+                break
+                
+            self.status = "Running"
+            logger.info(f"Cycle finished. Next run in {interval_minutes} minutes. Memory freed via gc.")
+            
+            # Sleep between run cycles in small 1-sec chunks so we can interrupt immediately
+            seconds_to_sleep = interval_minutes * 60
+            for _ in range(int(seconds_to_sleep)):
+                if self.stop_event.is_set():
+                    break
+                await asyncio.sleep(1)
+        
         logger.info("Background scraper thread finished.")
 
 # Global scraper runner instance

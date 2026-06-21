@@ -290,6 +290,8 @@ async def scrape_yahoo_fleamarket(page: Page, keyword: str, min_price: int, max_
         logger.info(f"Yahoo! Fleamarket: Found {len(links)} raw links.")
         
         for l in links:
+            if len(items) >= max_items:
+                break
             try:
                 href = await l.get_attribute("href")
                 if not href or "/item/" not in href:

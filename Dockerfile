@@ -7,7 +7,7 @@ ENV PYTHONUNBUFFERED=1
 
 # Memory optimization environment variables
 ENV MALLOC_ARENA_MAX=2
-ENV NODE_OPTIONS="--max-old-space-size=64"
+ENV NODE_OPTIONS="--max-old-space-size=128"
 
 WORKDIR /app
 
