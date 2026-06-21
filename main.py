@@ -5,6 +5,7 @@ import argparse
 import asyncio
 import logging
 import random
+import gc
 from datetime import datetime
 from playwright.async_api import async_playwright
 
@@ -45,12 +46,25 @@ BROWSER_ARGS = [
     "--single-process",
     "--disable-extensions",
     "--disable-component-extensions",
-    "--js-flags=--max-old-space-size=128"
+    "--disable-background-networking",
+    "--disable-default-apps",
+    "--disable-sync",
+    "--disable-translate",
+    "--metrics-recording-only",
+    "--mute-audio",
+    "--no-default-browser-check",
+    "--disable-hang-monitor",
+    "--disable-prompt-on-repost",
+    "--disable-client-side-phishing-detection",
+    "--disable-component-update",
+    "--disable-domain-reliability",
+    "--disable-features=AudioServiceOutOfProcess,IsolateOrigins,site-per-process",
+    "--js-flags=--max-old-space-size=64"
 ]
 
 CONTEXT_OPTIONS = {
     "user_agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-    "viewport": {"width": 1280, "height": 800},
+    "viewport": {"width": 800, "height": 600},
     "locale": "ja-JP",
     "timezone_id": "Asia/Tokyo",
     "extra_http_headers": {"Accept-Language": "ja-JP,ja;q=0.9"}
@@ -70,23 +84,14 @@ async def create_page(browser):
     await page.route("**/*", block_resources)
     return context, page
 
-async def safe_get_market_price(browser, cleaned_title):
-    """Fetch market price using an isolated, disposable browser context.
-    This prevents a Mercari page crash from killing the main scraping page."""
-    context = None
+async def safe_get_market_price(page, cleaned_title):
+    """Fetch market price reusing the same page to save memory."""
     try:
-        context, page = await create_page(browser)
         result = await scraper.get_market_price(page, cleaned_title)
         return result
     except Exception as e:
         logger.warning(f"Market price lookup failed for '{cleaned_title}': {e}")
         return 0
-    finally:
-        if context:
-            try:
-                await context.close()
-            except Exception:
-                pass
 
 async def run_search_cycle(config, browser, dry_run=False):
     """Executes a single check cycle for all configured searches."""
@@ -96,6 +101,9 @@ async def run_search_cycle(config, browser, dry_run=False):
     if not searches:
         logger.warning("No searches configured in config.json.")
         return
+    
+    max_items = config.get("max_items_per_page", 10)
+    skip_market = config.get("skip_market_price", False)
     
     # Create a fresh context+page for scraping Yahoo/PayPay each cycle
     scrape_context, scrape_page = await create_page(browser)
@@ -108,14 +116,14 @@ async def run_search_cycle(config, browser, dry_run=False):
             min_price = search_item.get("min_price", 0)
             max_price = search_item.get("max_price", 999999)
             
-            logger.info(f"Processing search {idx+1}/{len(searches)}: '{search_query}' (Price: {min_price} - {max_price} JPY)")
+            logger.info(f"Processing search {idx+1}/{len(searches)}: '{search_query}' (Price: {min_price} - {max_price} JPY, max items: {max_items})")
             
             # 1. Scrape Yahoo Auctions
-            yahoo_items = await scraper.scrape_yahoo_auctions(scrape_page, search_query, min_price, max_price)
+            yahoo_items = await scraper.scrape_yahoo_auctions(scrape_page, search_query, min_price, max_price, max_items)
             await asyncio.sleep(random.uniform(3, 7)) # polite delay
             
             # 2. Scrape Yahoo! Fleamarket
-            fleamarket_items = await scraper.scrape_yahoo_fleamarket(scrape_page, search_query, min_price, max_price)
+            fleamarket_items = await scraper.scrape_yahoo_fleamarket(scrape_page, search_query, min_price, max_price, max_items)
             
             all_found = yahoo_items + fleamarket_items
             logger.info(f"Cycle completed for '{search_query}'. Found {len(all_found)} total items across all marketplaces.")
@@ -144,10 +152,15 @@ async def run_search_cycle(config, browser, dry_run=False):
                 # Check database for deduplication
                 seen = database.is_item_seen(marketplace, item_id)
                 if not seen:
-                    # Clean title and fetch market price in an ISOLATED context
-                    cleaned_title = scraper.clean_title_for_search(title)
-                    logger.info(f"Fetching market price for new item '{title}' (query: '{cleaned_title}')")
-                    item_market_price = await safe_get_market_price(browser, cleaned_title)
+                    item_market_price = 0
+                    if not skip_market:
+                        # Reuse scrape_page for market price to save memory (no separate context)
+                        cleaned_title = scraper.clean_title_for_search(title)
+                        logger.info(f"Fetching market price for new item '{title}' (query: '{cleaned_title}')")
+                        item_market_price = await safe_get_market_price(scrape_page, cleaned_title)
+                    else:
+                        logger.info(f"Skipping market price lookup (disabled in config)")
+                    
                     item["market_price"] = item_market_price if item_market_price > 0 else None
                     item["estimated_profit"] = (item_market_price - price) if item_market_price > 0 else None
                     
@@ -180,6 +193,8 @@ async def run_search_cycle(config, browser, dry_run=False):
             await scrape_context.close()
         except Exception:
             pass
+        # Force garbage collection after each cycle
+        gc.collect()
 
     logger.info("Check cycle completed.")
 

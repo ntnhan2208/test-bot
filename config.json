@@ -1,5 +1,7 @@
 {
   "check_interval_minutes": 15,
+  "max_items_per_page": 5,
+  "skip_market_price": false,
   "notifications": {
     "discord_webhook_url": "YOUR_DISCORD_WEBHOOK_URL_HERE",
     "line": {
@@ -17,19 +19,7 @@
       "japanese_keyword": "macbook",
       "min_price": 5000,
       "max_price": 50000,
-      "exclude_keywords": "hbroken, parts"
-    },
-    {
-      "japanese_keyword": "iphone",
-      "keyword": "iphone",
-      "max_price": 30000,
-      "min_price": 2000
-    },
-    {
-      "japanese_keyword": "g-shock",
-      "keyword": "g-shock",
-      "max_price": 8000,
-      "min_price": 1000
+      "exclude_keywords": "broken, parts"
     }
   ]
 }

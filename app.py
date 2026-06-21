@@ -3,6 +3,7 @@ import json
 import threading
 import asyncio
 import logging
+import gc
 from flask import Flask, jsonify, request, render_template, send_from_directory
 import sqlite3
 import random
@@ -90,13 +91,26 @@ class ScraperRunner:
                     "--single-process",
                     "--disable-extensions",
                     "--disable-component-extensions",
-                    "--js-flags=--max-old-space-size=128"
+                    "--disable-background-networking",
+                    "--disable-default-apps",
+                    "--disable-sync",
+                    "--disable-translate",
+                    "--metrics-recording-only",
+                    "--mute-audio",
+                    "--no-default-browser-check",
+                    "--disable-hang-monitor",
+                    "--disable-prompt-on-repost",
+                    "--disable-client-side-phishing-detection",
+                    "--disable-component-update",
+                    "--disable-domain-reliability",
+                    "--disable-features=AudioServiceOutOfProcess,IsolateOrigins,site-per-process",
+                    "--js-flags=--max-old-space-size=64",
                 ]
             )
             
             context_options = {
                 "user_agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-                "viewport": {"width": 1280, "height": 800},
+                "viewport": {"width": 800, "height": 600},
                 "locale": "ja-JP",
                 "timezone_id": "Asia/Tokyo",
                 "extra_http_headers": {"Accept-Language": "ja-JP,ja;q=0.9"}
@@ -114,22 +128,14 @@ class ScraperRunner:
                 await pg.route("**/*", block_resources)
                 return ctx, pg
             
-            async def safe_market_price(cleaned_title):
-                """Fetch market price in an isolated context so crashes don't affect the main page."""
-                mctx = None
+            async def safe_market_price(page, cleaned_title):
+                """Fetch market price reusing the same page to save memory."""
                 try:
-                    mctx, mpage = await create_page()
-                    result = await scraper.get_market_price(mpage, cleaned_title)
+                    result = await scraper.get_market_price(page, cleaned_title)
                     return result
                 except Exception as e:
                     logger.warning(f"Market price lookup failed for '{cleaned_title}': {e}")
                     return 0
-                finally:
-                    if mctx:
-                        try:
-                            await asyncio.wait_for(mctx.close(), timeout=3.0)
-                        except Exception:
-                            pass
             
             while not self.stop_event.is_set():
                 scrape_context = None
@@ -153,6 +159,8 @@ class ScraperRunner:
 
                     searches = config.get("searches", [])
                     interval_minutes = config.get("check_interval_minutes", 15)
+                    max_items = config.get("max_items_per_page", 10)
+                    skip_market = config.get("skip_market_price", False)
                     
                     for idx, search_item in enumerate(searches):
                         if self.stop_event.is_set():
@@ -163,10 +171,10 @@ class ScraperRunner:
                         min_price = search_item.get("min_price", 0)
                         max_price = search_item.get("max_price", 999999)
                         
-                        logger.info(f"[UI Scraper] Scanning: '{search_query}' (Price: {min_price} - {max_price} JPY)")
+                        logger.info(f"[UI Scraper] Scanning: '{search_query}' (Price: {min_price} - {max_price} JPY, max items: {max_items})")
                         
                         # 1. Yahoo Auctions
-                        yahoo_items = await scraper.scrape_yahoo_auctions(scrape_page, search_query, min_price, max_price)
+                        yahoo_items = await scraper.scrape_yahoo_auctions(scrape_page, search_query, min_price, max_price, max_items)
                         # Polite interruptible sleeps
                         for _ in range(random.randint(3, 7)):
                             if self.stop_event.is_set():
@@ -177,7 +185,7 @@ class ScraperRunner:
                             break
                             
                         # 2. Yahoo! Fleamarket
-                        fleamarket_items = await scraper.scrape_yahoo_fleamarket(scrape_page, search_query, min_price, max_price)
+                        fleamarket_items = await scraper.scrape_yahoo_fleamarket(scrape_page, search_query, min_price, max_price, max_items)
                         
                         all_found = yahoo_items + fleamarket_items
                         
@@ -204,10 +212,16 @@ class ScraperRunner:
                             
                             seen = database.is_item_seen(marketplace, item_id)
                             if not seen:
-                                # Fetch market price in an ISOLATED context (crash-safe)
-                                cleaned_title = scraper.clean_title_for_search(title)
-                                logger.info(f"[UI Scraper] Fetching market price for new item '{title}' (query: '{cleaned_title}')")
-                                item_market_price = await safe_market_price(cleaned_title)
+                                item_market_price = 0
+                                if not skip_market:
+                                    # Reuse scrape_page for market price to save memory
+                                    cleaned_title = scraper.clean_title_for_search(title)
+                                    logger.info(f"[UI Scraper] Fetching market price for new item '{title}' (query: '{cleaned_title}')")
+                                    item_market_price = await safe_market_price(scrape_page, cleaned_title)
+                                    # Navigate back after market price lookup to reset page state
+                                else:
+                                    logger.info(f"[UI Scraper] Skipping market price lookup (disabled in config)")
+                                    
                                 item["market_price"] = item_market_price if item_market_price > 0 else None
                                 item["estimated_profit"] = (item_market_price - price) if item_market_price > 0 else None
                                 
@@ -243,12 +257,14 @@ class ScraperRunner:
                             await asyncio.wait_for(scrape_context.close(), timeout=3.0)
                         except Exception:
                             pass
+                    # Force garbage collection after each cycle
+                    gc.collect()
                 
                 if self.stop_event.is_set():
                     break
                     
                 self.status = "Running"
-                logger.info(f"Cycle finished. Next run in {interval_minutes} minutes.")
+                logger.info(f"Cycle finished. Next run in {interval_minutes} minutes. Memory freed via gc.")
                 
                 # Sleep between run cycles in small 1-sec chunks so we can interrupt immediately
                 seconds_to_sleep = interval_minutes * 60
