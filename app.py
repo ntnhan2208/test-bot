@@ -35,6 +35,7 @@ class ScraperRunner:
         self.status = "Stopped"  # "Stopped", "Running", "Scanning"
         self.last_run_time = None
         self.loop = None
+        self.task = None
         
     def start(self):
         if self.thread and self.thread.is_alive():
@@ -55,6 +56,11 @@ class ScraperRunner:
     def stop(self):
         if self.thread and self.thread.is_alive():
             self.stop_event.set()
+            if self.loop and self.task:
+                try:
+                    self.loop.call_soon_threadsafe(self.task.cancel)
+                except Exception as e:
+                    logger.warning(f"Failed to cancel scraper task: {e}")
             self.status = "Stopped"
             return True
         return False
@@ -64,14 +70,37 @@ class ScraperRunner:
         # Create a new event loop for this background thread
         self.loop = asyncio.new_event_loop()
         asyncio.set_event_loop(self.loop)
+        
+        # Suppress TargetClosedError tracebacks on loop cancellation/shutdown
+        def exception_handler(loop, context):
+            exception = context.get("exception")
+            if exception and "TargetClosedError" in type(exception).__name__:
+                logger.debug("Ignored TargetClosedError in background event loop.")
+            else:
+                loop.default_exception_handler(context)
+        self.loop.set_exception_handler(exception_handler)
+        
+        self.task = self.loop.create_task(self._async_scraper_loop())
         try:
-            self.loop.run_until_complete(self._async_scraper_loop())
+            self.loop.run_until_complete(self.task)
+        except asyncio.CancelledError:
+            logger.info("Background scraper task cancelled cleanly.")
         except Exception as e:
             logger.error(f"Error in background scraper loop: {e}")
         finally:
             self.status = "Stopped"
+            # Gather and cancel any other pending tasks to prevent "Future exception was never retrieved" logs
+            try:
+                pending = asyncio.all_tasks(self.loop)
+                for t in pending:
+                    t.cancel()
+                if pending:
+                    self.loop.run_until_complete(asyncio.gather(*pending, return_exceptions=True))
+            except Exception as cleanup_err:
+                logger.debug(f"Error cleaning up pending loop tasks: {cleanup_err}")
             self.loop.close()
             self.loop = None
+            self.task = None
             
     async def _async_scraper_loop(self):
         logger.info("Background scraper thread started.")
@@ -181,7 +210,7 @@ class ScraperRunner:
                     finally:
                         if scrape_context:
                             try:
-                                await scrape_context.close()
+                                await asyncio.shield(scrape_context.close())
                             except Exception:
                                 pass
                                 
@@ -206,7 +235,7 @@ class ScraperRunner:
                     finally:
                         if scrape_context:
                             try:
-                                await scrape_context.close()
+                                await asyncio.shield(scrape_context.close())
                             except Exception:
                                 pass
                     
@@ -250,7 +279,7 @@ class ScraperRunner:
                                 finally:
                                     if m_context:
                                         try:
-                                            await m_context.close()
+                                            await asyncio.shield(m_context.close())
                                         except Exception:
                                             pass
                             else:
@@ -262,7 +291,7 @@ class ScraperRunner:
                             new_items_count += 1
                             profit_str = f" (Profit: ¥{item['estimated_profit']:,})" if item["estimated_profit"] is not None else ""
                             logger.info(f"[UI Scraper] [NEW] [{marketplace}] {title} - ¥{price:,}{profit_str}")
-                            notifier.notify_all(config, item)
+                            await asyncio.get_running_loop().run_in_executor(None, notifier.notify_all, config, item)
                             database.mark_item_as_seen(marketplace, item_id, title, price, url, item["market_price"], item["estimated_profit"])
                             
                             # Polite delay after querying comparison site
@@ -287,12 +316,12 @@ class ScraperRunner:
             finally:
                 if browser:
                     try:
-                        await browser.close()
+                        await asyncio.shield(browser.close())
                     except Exception:
                         pass
                 if p:
                     try:
-                        await p.stop()
+                        await asyncio.shield(p.stop())
                     except Exception:
                         pass
                 # Force garbage collection after each cycle
