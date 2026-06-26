@@ -36,6 +36,8 @@ class ScraperRunner:
         self.last_run_time = None
         self.loop = None
         self.task = None
+        self.start_time = None
+        
         
     def start(self):
         if self.thread and self.thread.is_alive():
@@ -48,10 +50,12 @@ class ScraperRunner:
             else:
                 return False
         self.stop_event.clear()
+        self.start_time = datetime.now()
         self.thread = threading.Thread(target=self._run_loop)
         self.thread.daemon = True
         self.thread.start()
         return True
+        
         
     def stop(self):
         if self.thread and self.thread.is_alive():
@@ -64,6 +68,20 @@ class ScraperRunner:
             self.status = "Stopped"
             return True
         return False
+
+    def _trigger_self_restart(self):
+        """Helper to stop and restart the bot from a separate thread to avoid deadlocks."""
+        import time
+        # Give the loop thread a moment to exit and clean up
+        time.sleep(2)
+        logger.info("[SYSTEM] Self-restart: Stopping current runner...")
+        self.stop()
+        
+        # Wait a bit for everything to settle
+        time.sleep(3)
+        logger.info("[SYSTEM] Self-restart: Starting new runner...")
+        self.start()
+        
 
     def _run_loop(self):
         self.status = "Running"
@@ -107,7 +125,16 @@ class ScraperRunner:
         database.init_db()
         
         while not self.stop_event.is_set():
+            # Check if 1 hour has elapsed since start to perform a scheduled memory-cleanup restart
+            if self.start_time:
+                elapsed_seconds = (datetime.now() - self.start_time).total_seconds()
+                if elapsed_seconds >= 3600:
+                    logger.info(f"[SYSTEM] Bot has been running for {elapsed_seconds/60:.1f} minutes. Triggering scheduled hourly restart to optimize system memory...")
+                    threading.Thread(target=self._trigger_self_restart, daemon=True).start()
+                    break
+
             # Reload config every run cycle to capture UI updates
+            
             try:
                 with open(CONFIG_PATH, "r", encoding="utf-8") as f:
                     config = json.load(f)
@@ -418,31 +445,51 @@ def manage_config():
 
 @app.route("/api/items", methods=["GET"])
 def get_items():
-    """Returns recent scraped items from the SQLite database."""
+    """Returns recent scraped items from the SQLite database with optional pagination."""
     limit = request.args.get("limit", default=50, type=int)
     search_query = request.args.get("search", default="", type=str)
     marketplace = request.args.get("marketplace", default="", type=str)
+    
+    # Pagination parameters
+    page = request.args.get("page", default=1, type=int)
+    paginate = request.args.get("paginate", default="false").lower() == "true"
     
     conn = sqlite3.connect(database.DEFAULT_DB_PATH)
     conn.row_factory = sqlite3.Row
     cursor = conn.cursor()
     
     try:
-        query = "SELECT * FROM seen_items WHERE 1=1"
+        # Base filter query
+        where_clause = " WHERE 1=1"
         params = []
         
         if search_query:
-            query += " AND (title LIKE ? OR item_id LIKE ?)"
+            where_clause += " AND (title LIKE ? OR item_id LIKE ?)"
             params.append(f"%{search_query}%")
             params.append(f"%{search_query}%")
             
         if marketplace:
-            query += " AND marketplace = ?"
+            where_clause += " AND marketplace = ?"
             params.append(marketplace)
             
-        query += " ORDER BY discovered_at DESC LIMIT ?"
-        params.append(limit)
+        # Get total count if paginating
+        total_count = 0
+        if paginate:
+            count_cursor = conn.cursor()
+            count_cursor.execute("SELECT COUNT(*) FROM seen_items" + where_clause, params)
+            total_count = count_cursor.fetchone()[0]
+            
+        # Select items
+        query = "SELECT * FROM seen_items" + where_clause + " ORDER BY discovered_at DESC"
         
+        if paginate:
+            query += " LIMIT ? OFFSET ?"
+            offset = (page - 1) * limit
+            params.extend([limit, offset])
+        else:
+            query += " LIMIT ?"
+            params.extend([limit])
+            
         cursor.execute(query, params)
         rows = cursor.fetchall()
         
@@ -467,8 +514,22 @@ def get_items():
                 "estimated_profit": estimated_profit,
                 "discovered_at": row["discovered_at"]
             })
-        return jsonify(items)
+            
+        if paginate:
+            import math
+            pages = math.ceil(total_count / limit) if total_count > 0 else 1
+            return jsonify({
+                "items": items,
+                "total": total_count,
+                "page": page,
+                "limit": limit,
+                "pages": pages
+            })
+        else:
+            return jsonify(items)
     except sqlite3.OperationalError:
+        if paginate:
+            return jsonify({"items": [], "total": 0, "page": 1, "limit": limit, "pages": 1})
         return jsonify([])
     finally:
         conn.close()

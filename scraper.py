@@ -363,35 +363,32 @@ async def get_market_price(page: Page, keyword: str):
         if not grid_items:
             grid_items = await page.locator("mer-item-thumbnail").all()
             
-        for item in grid_items[:10]:  # sample up to 10 items (reduced from 40)
+        for item in grid_items[:10]:
             try:
                 # Link/URL
                 link_el = item.locator("a").first
                 href = await link_el.get_attribute("href") if await link_el.count() > 0 else ""
                 full_url = urllib.parse.urljoin("https://jp.mercari.com", href) if href else ""
-
-                # Title
-                img_el = item.locator("img").first
-                title_alt = await img_el.get_attribute("alt") if await img_el.count() > 0 else ""
-                title = title_alt.replace("のサムネイル", "").strip() if title_alt else "Mercari Item"
-
-                # Price
-                price = None
-                thumbnail_el = item.locator("[id^='m']").first
-                if await thumbnail_el.count() > 0:
-                    label = await thumbnail_el.get_attribute("aria-label")
-                    if label:
-                        jpy_match = re.search(r"([\d,]+)円", label)
-                        if jpy_match:
-                            price = clean_price(jpy_match.group(1))
                 
-                if price is None or price == 0:
+                # Title
+                title_el = item.locator("mer-item-thumbnail").first
+                title = ""
+                if await title_el.count() > 0:
+                    title = await title_el.get_attribute("item-name") or ""
+                if not title:
+                    # Fallback to image alt
+                    img_el = item.locator("img").first
+                    title = await img_el.get_attribute("alt") if await img_el.count() > 0 else "Mercari Item"
+                    
+                # Price
+                price = 0
+                if await title_el.count() > 0:
+                    price_str = await title_el.get_attribute("price")
+                    price = clean_price(price_str)
+                if not price or price == 0:
                     price_el = item.locator("[class*='price']").first
-                    if await price_el.count() > 0:
-                        price_text = await price_el.inner_text()
-                        if any(marker in price_text for marker in ["VND", "₫", "đ"]):
-                            continue
-                        price = clean_price(price_text)
+                    price_text = await price_el.inner_text() if await price_el.count() > 0 else "0"
+                    price = clean_price(price_text)
                     
                 if price and price > 0:
                     prices.append({
@@ -399,7 +396,8 @@ async def get_market_price(page: Page, keyword: str):
                         "price": price,
                         "url": full_url
                     })
-            except Exception:
+            except Exception as item_err:
+                logger.debug(f"Failed to parse Mercari sold item: {item_err}")
                 continue
                 
         logger.info(f"Mercari comparison: extracted {len(prices)} JPY prices.")
@@ -409,16 +407,10 @@ async def get_market_price(page: Page, keyword: str):
             lowest_5 = sorted_items[:5]
             avg_price = int(sum(x["price"] for x in lowest_5) / len(lowest_5))
             
-            logger.info(f"Calculated average of {len(lowest_5)} lowest JPY prices for '{keyword}': JPY {avg_price:,}")
-            logger.info(f"--- Items used for average calculation of '{keyword}': ---")
-            for idx, item_detail in enumerate(lowest_5):
-                logger.info(f"  {idx+1}. {item_detail['title']} - ¥{item_detail['price']:,} - {item_detail['url']}")
-            logger.info("-------------------------------------------------------------")
+            logger.info(f"Calculated average of {len(lowest_5)} lowest Mercari JPY prices for '{keyword}': JPY {avg_price:,}")
             return avg_price
             
     except Exception as e:
         logger.warning(f"Failed to scrape Mercari for market price: {e}")
     
-    logger.warning(f"Could not extract any prices for '{keyword}' market calculation.")
     return 0
-

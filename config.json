@@ -1,7 +1,6 @@
 {
   "check_interval_minutes": 15,
   "max_items_per_page": 5,
-  "skip_market_price": false,
   "notifications": {
     "discord_webhook_url": "YOUR_DISCORD_WEBHOOK_URL_HERE",
     "line": {
@@ -15,11 +14,17 @@
   },
   "searches": [
     {
-      "keyword": "macbook",
+      "exclude_keywords": "broken, parts",
       "japanese_keyword": "macbook",
-      "min_price": 5000,
+      "keyword": "macbook",
       "max_price": 50000,
-      "exclude_keywords": "broken, parts"
+      "min_price": 5000
+    },
+    {
+      "keyword": "card",
+      "min_price": 1000,
+      "max_price": 50000
     }
-  ]
+  ],
+  "skip_market_price": false
 }

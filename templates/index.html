@@ -170,6 +170,8 @@
             display: flex;
             flex-direction: column;
             min-height: 100vh;
+            max-width: calc(100% - 240px);
+            min-width: 0;
         }
 
         /* TOPBAR STYLE */
@@ -757,6 +759,53 @@
         }
 
         /* MOBILE ADJUSTMENTS */
+        /* MOBILE BOTTOM NAVIGATION */
+        .mobile-bottom-nav {
+            display: none;
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            height: 60px;
+            background-color: var(--bg-sidebar);
+            border-top: 1px solid var(--border-color);
+            z-index: 2000;
+            justify-content: space-around;
+            align-items: center;
+            padding: 5px 0;
+            box-shadow: 0 -4px 12px rgba(0, 0, 0, 0.4);
+        }
+
+        .mobile-nav-item {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            flex: 1;
+            color: var(--text-secondary);
+            font-size: 0.7rem;
+            font-weight: 500;
+            gap: 4px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .mobile-nav-item svg {
+            width: 20px;
+            height: 20px;
+            stroke: currentColor;
+            stroke-width: 2;
+            fill: none;
+        }
+
+        .mobile-nav-item.active {
+            color: var(--primary);
+        }
+
+        .mobile-bot-toggle-wrapper {
+            display: none;
+        }
+
         @media (max-width: 1200px) {
             .middle-grid {
                 grid-template-columns: 1fr;
@@ -775,6 +824,72 @@
             }
             .main-wrapper {
                 margin-left: 0;
+                max-width: 100%;
+                overflow-x: hidden;
+                min-width: 0;
+            }
+            .mobile-bottom-nav {
+                display: flex;
+            }
+            body {
+                padding-bottom: 70px; /* Prevent content overlapping with bottom nav */
+            }
+            .topbar {
+                padding: 0 12px;
+            }
+            .breadcrumb {
+                font-size: 0.85rem;
+                font-weight: 700;
+            }
+            .breadcrumb-prefix {
+                display: none;
+            }
+            .topbar-right {
+                gap: 8px;
+            }
+            .notif-bell {
+                display: none !important;
+            }
+            .user-profile {
+                display: none !important;
+            }
+            .mobile-bot-toggle-wrapper {
+                display: block !important;
+            }
+            
+            /* Make panel card title stack gracefully */
+            .panel-title {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 12px !important;
+            }
+            .panel-title > div {
+                flex-wrap: wrap;
+                width: 100%;
+                gap: 8px;
+                justify-content: flex-start;
+            }
+            .panel-title input, .panel-title select, .panel-title button {
+                flex: 1 1 auto;
+                max-width: none !important;
+                font-size: 0.75rem !important;
+            }
+            
+            /* KPI responsiveness */
+            .kpi-row {
+                grid-template-columns: 1fr;
+                gap: 12px;
+            }
+            .kpi-card {
+                padding: 16px;
+            }
+            
+            /* Text sizing for small viewports */
+            .breadcrumb {
+                font-size: 0.9rem;
+            }
+            .content-container {
+                padding: 16px;
             }
         }
     </style>
@@ -822,15 +937,40 @@
         </div>
     </div>
 
+    <!-- MOBILE BOTTOM NAVIGATION -->
+    <div class="mobile-bottom-nav">
+        <div class="mobile-nav-item active" onclick="switchView('products')" id="mobile-menu-products">
+            <svg viewBox="0 0 24 24"><path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/></svg>
+            <span>Sản phẩm</span>
+        </div>
+        <div class="mobile-nav-item" onclick="switchView('keywords')" id="mobile-menu-keywords">
+            <svg viewBox="0 0 24 24"><path d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+            <span>Từ khóa</span>
+        </div>
+        <div class="mobile-nav-item" onclick="switchView('notifications')" id="mobile-menu-notifications">
+            <svg viewBox="0 0 24 24"><path d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"/></svg>
+            <span>Thông báo</span>
+        </div>
+        <div class="mobile-nav-item" onclick="switchView('logs')" id="mobile-menu-logs">
+            <svg viewBox="0 0 24 24"><path d="M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
+            <span>Hệ thống</span>
+        </div>
+    </div>
+
     <!-- MAIN WRAPPER -->
     <div class="main-wrapper">
         
         <!-- TOP NAVBAR -->
         <div class="topbar">
             <div class="topbar-left">
-                <div class="breadcrumb" id="breadcrumb-title">Dashboard / Sản phẩm phát hiện</div>
+                <div class="breadcrumb" id="breadcrumb-title"><span class="breadcrumb-prefix">Dashboard / </span>Sản phẩm phát hiện</div>
             </div>
             <div class="topbar-right">
+                <!-- Mobile Bot Toggle -->
+                <div class="mobile-bot-toggle-wrapper">
+                    <button class="btn btn-xs btn-purple" id="mobile-btn-control" onclick="toggleBot()">Bật Bot</button>
+                </div>
+
                 <!-- Notifications -->
                 <div class="notif-bell" onclick="switchView('products')">
                     <svg viewBox="0 0 24 24"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
@@ -1099,8 +1239,8 @@
                     <div class="panel-title">
                         SẢN PHẨM GIÁ HỜI PHÁT HIỆN
                         <div style="display:flex; gap:10px; align-items:center;">
-                            <input type="text" class="form-input" id="history-search" placeholder="Tìm sản phẩm..." oninput="loadHistory()" style="max-width:200px; padding: 6px 12px; font-size: 0.8rem;">
-                            <select class="form-input" id="history-filter-marketplace" onchange="loadHistory()" style="max-width:150px; padding: 6px 12px; font-size: 0.8rem;">
+                            <input type="text" class="form-input" id="history-search" placeholder="Tìm sản phẩm..." oninput="loadHistory(1)" style="max-width:200px; padding: 6px 12px; font-size: 0.8rem;">
+                            <select class="form-input" id="history-filter-marketplace" onchange="loadHistory(1)" style="max-width:150px; padding: 6px 12px; font-size: 0.8rem;">
                                 <option value="">Tất cả nguồn</option>
                                 <option value="Yahoo Auctions">Yahoo Auctions</option>
                                 <option value="Yahoo! Fleamarket">Yahoo! Fleamarket</option>
@@ -1295,12 +1435,17 @@
                 'notifications': 'Kênh thông báo & Webhook',
                 'logs': 'VPS & Nhật ký hệ thống'
             };
-            document.getElementById('breadcrumb-title').textContent = 'Dashboard / ' + (menuTitleMap[viewId] || '');
+            document.getElementById('breadcrumb-title').innerHTML = '<span class="breadcrumb-prefix">Dashboard / </span>' + (menuTitleMap[viewId] || '');
 
             // Sidebar Active class
             document.querySelectorAll('.menu-item').forEach(item => item.classList.remove('active'));
             const activeMenuItem = document.getElementById('menu-' + viewId);
             if (activeMenuItem) activeMenuItem.classList.add('active');
+
+            // Mobile Nav Active class
+            document.querySelectorAll('.mobile-nav-item').forEach(item => item.classList.remove('active'));
+            const activeMobileItem = document.getElementById('mobile-menu-' + viewId);
+            if (activeMobileItem) activeMobileItem.classList.add('active');
 
             // Hide/Show Views
             document.querySelectorAll('.view-panel').forEach(panel => panel.style.display = 'none');
@@ -1350,6 +1495,7 @@
                 const dot = document.getElementById('sidebar-bot-dot');
                 const text = document.getElementById('sidebar-bot-status');
                 const btn = document.getElementById('sidebar-btn-control');
+                const mobileBtn = document.getElementById('mobile-btn-control');
                 
                 const kpiDot = document.getElementById('kpi-bot-indicator');
                 const kpiText = document.getElementById('kpi-bot-status');
@@ -1363,6 +1509,11 @@
                     btn.textContent = 'Dừng Bot';
                     btn.className = 'btn btn-sm btn-danger';
                     
+                    if (mobileBtn) {
+                        mobileBtn.textContent = 'Dừng Bot';
+                        mobileBtn.className = 'btn btn-xs btn-danger';
+                    }
+                    
                     kpiText.textContent = 'Scanning...';
                     kpiText.style.color = 'var(--status-yellow)';
                 } else if (data.status === 'Running') {
@@ -1371,12 +1522,22 @@
                     btn.textContent = 'Dừng Bot';
                     btn.className = 'btn btn-sm btn-danger';
                     
+                    if (mobileBtn) {
+                        mobileBtn.textContent = 'Dừng Bot';
+                        mobileBtn.className = 'btn btn-xs btn-danger';
+                    }
+                    
                     kpiText.textContent = 'Online';
                     kpiText.style.color = 'var(--status-green)';
                 } else {
                     text.textContent = 'Offline';
                     btn.textContent = 'Bật Bot';
                     btn.className = 'btn btn-sm btn-purple';
+                    
+                    if (mobileBtn) {
+                        mobileBtn.textContent = 'Bật Bot';
+                        mobileBtn.className = 'btn btn-xs btn-purple';
+                    }
                     
                     kpiText.textContent = 'Offline';
                     kpiText.style.color = 'var(--status-red)';
@@ -1400,10 +1561,12 @@
         // Toggle Bot
         async function toggleBot() {
             const btn = document.getElementById('sidebar-btn-control');
-            const isRunning = btn.textContent === 'Dừng Bot';
+            const mobileBtn = document.getElementById('mobile-btn-control');
+            const isRunning = btn.textContent === 'Dừng Bot' || (mobileBtn && mobileBtn.textContent === 'Dừng Bot');
             const action = isRunning ? 'stop' : 'start';
             
-            btn.disabled = true;
+            if (btn) btn.disabled = true;
+            if (mobileBtn) mobileBtn.disabled = true;
             try {
                 const response = await fetch('/api/control', {
                     method: 'POST',
@@ -1415,7 +1578,8 @@
             } catch (err) {
                 console.error("Error toggling bot:", err);
             } finally {
-                btn.disabled = false;
+                if (btn) btn.disabled = false;
+                if (mobileBtn) mobileBtn.disabled = false;
             }
         }
 
@@ -1476,7 +1640,7 @@
                             : `¥${item.market_price.toLocaleString()}`;
                         marketPriceDisplay = `
                             <div style="font-weight: 700;">${formattedMarketPrice}</div>
-                            <div style="margin-top: 4px; display: flex; gap: 8px; font-size: 0.7rem; justify-content: center;">
+                            <div style="margin-top: 4px; display: flex; gap: 6px; font-size: 0.7rem; justify-content: center; align-items: center;">
                                 <a href="https://jp.mercari.com/search?keyword=${encodeURIComponent(cleanTitleForSearch(item.title))}&status=trading_sold" target="_blank" style="color: #00e676; text-decoration: none; font-weight: 600;">Mercari</a>
                             </div>
                         `;
@@ -1705,19 +1869,28 @@
         }
 
         // Load history table with pagination and filter
-        async function loadHistory() {
+        let currentHistoryPage = 1;
+
+        async function loadHistory(page = 1) {
+            currentHistoryPage = page;
             const tbody = document.querySelector('#view-products-table-detail tbody');
+            const paginationContainer = document.getElementById('history-pagination');
             tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;color:var(--text-secondary);">Đang tải lịch sử săn tin...</td></tr>';
             
             const searchVal = encodeURIComponent(document.getElementById('history-search').value.trim());
             const marketplaceVal = document.getElementById('history-filter-marketplace').value;
             
             try {
-                const response = await fetch(`/api/items?limit=100&search=${searchVal}&marketplace=${marketplaceVal}`);
-                const items = await response.json();
+                const response = await fetch(`/api/items?paginate=true&page=${page}&limit=15&search=${searchVal}&marketplace=${marketplaceVal}`);
+                const data = await response.json();
+                
+                const items = data.items || [];
+                const total = data.total || 0;
+                const totalPages = data.pages || 1;
                 
                 if (items.length === 0) {
                     tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;color:var(--text-secondary);">Không tìm thấy lịch sử phù hợp.</td></tr>';
+                    if (paginationContainer) paginationContainer.innerHTML = '';
                     return;
                 }
                 
@@ -1737,7 +1910,7 @@
                             : `¥${item.market_price.toLocaleString()}`;
                         marketPriceDisplay = `
                             <div style="font-weight: 700;">${formattedMarketPrice}</div>
-                            <div style="margin-top: 4px; display: flex; gap: 8px; font-size: 0.7rem; justify-content: center;">
+                            <div style="margin-top: 4px; display: flex; gap: 6px; font-size: 0.7rem; justify-content: center; align-items: center;">
                                 <a href="https://jp.mercari.com/search?keyword=${encodeURIComponent(cleanTitleForSearch(item.title))}&status=trading_sold" target="_blank" style="color: #00e676; text-decoration: none; font-weight: 600;">Mercari</a>
                             </div>
                         `;
@@ -1772,10 +1945,67 @@
                     `;
                     tbody.appendChild(tr);
                 });
+
+                renderPagination(totalPages, currentHistoryPage);
             } catch (err) {
                 tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;color:var(--status-red);">Lỗi kết nối lịch sử dữ liệu.</td></tr>';
+                if (paginationContainer) paginationContainer.innerHTML = '';
                 console.error(err);
             }
+        }
+
+        function renderPagination(totalPages, currentPage) {
+            const container = document.getElementById('history-pagination');
+            if (!container) return;
+            
+            if (totalPages <= 1) {
+                container.innerHTML = '';
+                return;
+            }
+            
+            let html = '';
+            
+            // Prev button
+            html += `<button class="page-btn" ${currentPage === 1 ? 'disabled style="opacity: 0.5; cursor: not-allowed;"' : `onclick="loadHistory(${currentPage - 1})"`}>Trước</button>`;
+            
+            // Generate page numbers
+            const pageNumbers = [];
+            const range = 1; // Number of pages to show on each side of active page
+            
+            for (let i = 1; i <= totalPages; i++) {
+                if (
+                    i === 1 || // Always show first page
+                    i === totalPages || // Always show last page
+                    (i >= currentPage - range && i <= currentPage + range) // Show pages around active page
+                ) {
+                    pageNumbers.push(i);
+                } else if (i === 2 || i === totalPages - 1) {
+                    // Place ellipsis
+                    pageNumbers.push('...');
+                }
+            }
+            
+            // Filter out duplicate ellipses
+            const cleanPages = [];
+            for (let i = 0; i < pageNumbers.length; i++) {
+                if (pageNumbers[i] === '...' && cleanPages[cleanPages.length - 1] === '...') {
+                    continue;
+                }
+                cleanPages.push(pageNumbers[i]);
+            }
+            
+            cleanPages.forEach(p => {
+                if (p === '...') {
+                    html += `<span style="color: var(--text-secondary); padding: 4px 8px; font-size: 0.8rem; font-weight: 600;">...</span>`;
+                } else {
+                    html += `<button class="page-btn ${p === currentPage ? 'active' : ''}" onclick="loadHistory(${p})">${p}</button>`;
+                }
+            });
+            
+            // Next button
+            html += `<button class="page-btn" ${currentPage === totalPages ? 'disabled style="opacity: 0.5; cursor: not-allowed;"' : `onclick="loadHistory(${currentPage + 1})"`}>Sau</button>`;
+            
+            container.innerHTML = html;
         }
 
         // Load logs into screen
